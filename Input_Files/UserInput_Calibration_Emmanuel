@@ -1,0 +1,41 @@
+#1
+ProcessingMode Calibration
+NumberSamples 1
+Samples B10
+NumberDetectors 1
+Detectors DEED
+NumberStrips 16
+#2
+TOFoffset[ns] 1680.705
+Flightpath[m] 19.215688
+#3
+ShiftFactor 1.0
+DedicatedPS 7e12 1e13
+ParasiticPS 1e12 7e12
+PKUPTOF 13272.6 13272.6
+#4
+NumberPeaks 3
+SimulatedEnergy 0.415879 1.23178  1.55374
+SimulatedEnergyError 0.1 0.01     0.01
+ParameterCalFile /home/francisco/Desktop/Year_2026/Al26_Analysis/myDSSSD/Input_Files/Info_Peak_Emmanuel_DEED_TC_40
+WidthFitting 100
+#5
+NumberEnergyRanges 1
+EnergyRangeCut 5e-2 100
+#7
+RootFiles /home/francisco/Desktop/Year_2026/Al26_Analysis/B_from_Al26_TC_40_0.5_0.125/
+#
+RunList /home/francisco/Desktop/Year_2026/Al26_Analysis/B_from_Al26_TC_40_0.5_0.125/Run_List.txt
+#
+STOP
+#1 General_definition_for_the_processing
+#2 By_default_we_need_toffset_and_FlightPath
+#3 Shift factor for TOF spectra, Intensities and PKUP TOF
+#4 Parameters for the calibration
+#5 Energy_Range_for_the_deposited_energy_analysis
+#Energy cuts 
+#6 Strips_to_be_discard_for_the_analysis
+#7 Reading_files_for_the_processing
+#RootFiles /home/francisco/Desktop/Year_2026/Al26_Analysis/LiF_from_Ca41/
+#RunList /home/francisco/Desktop/Year_2026/Al26_Analysis/LiF_from_Ca41/Run_List.txt
+#Lithium_Peak_Simulated 0.415879  

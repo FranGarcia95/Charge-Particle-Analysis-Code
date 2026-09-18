@@ -1,0 +1,24 @@
+#Define_the_number_of_point_for_the_FlightPath_Calibration
+Number_Peak_Fitted 3
+#Define_the_experimental_range_for_each_point_used_for_the_calibration
+Exp_Lower_Limit 60000.0 6900.0 4600.0 
+Exp_Upper_Limit 90000.0 7800.0 5000.0 
+#Define_the_experimental_parameters_of_each_point_for_the_calibration
+Exp_Thermal 0
+Exp_First_Dip  5  3    39.3    75415   2000  0.0025
+Exp_Second_Dip 4  100  40      7433.0  145
+Exp_Third_Dip  4  121  31      4916.0  60
+Exp_Resonance  0
+#Define_the_simulation_range_for_each_point_used_for_the_calibration
+Sim_Lower_Limit 400.  37000.0  95000.0  
+Sim_Upper_Limit 280.  30000.   72000.0  
+#Define_the_simulation_parameters_of_each_point_for_the_calibration
+Sim_Thermal 0
+Sim_First_Dip  5  46000  10000  335    11   -46
+Sim_Second_Dip 4  5498.  2077.  34575  3595
+Sim_Third_Dip  4  19000  6000   83520. 1800  
+Sim_Resonance  0
+#121  31      4916.0  60
+#110  35      4820.0  300
+#ResSim  3  7e7  2800.0  800.0
+#Res Li6 3  7e7  2800.0  800.0

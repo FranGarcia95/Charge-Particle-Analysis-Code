@@ -1,0 +1,54 @@
+#1
+ProcessingMode Stability
+NumberSamples 1
+Samples B10
+NumberDetectors 1
+Detectors DEED
+NumberStrips 16
+#2
+TOFoffset[ns] 1800.705
+Flightpath[m] 19.1744
+#3
+ShiftFactor 1.0
+DedicatedPS 7e12 1e13
+ParasiticPS 1e12 7e12
+PKUPTOF 13273.6 12743.5
+#4
+Calibration 1
+ParameterCalFile /home/francisco/Desktop/Year_2026/Al26_Analysis/myDSSSD/Input_Files/Energy_Calibration_Parameters_DEED_TC_40
+DefaultAmpCut 3
+AmplitudeRangeCut 0.5 1.2 4
+Constant/Curve 1
+PowFactor 1.8
+PileUpCorrection 1
+#5
+NumberEnergyRanges 12
+EnergyRangeCut 5e-2 100 1e4 1e5 2e5 2.5e5 3e5 3.5e5 4e5 4.5e5 5e5 5.5e5 6e5
+#6
+NumberStripsDiscard 1
+StripsDiscarded 14
+#7
+RootFiles /home/francisco/Desktop/Year_2026/Al26_Analysis/B_from_Al26_TC_30_0.5_0.125/
+RunList /home/francisco/Desktop/Year_2026/Al26_Analysis/B_from_Al26_TC_30_0.5_0.125/Run_List.txt
+OutputFile /home/francisco/Desktop/Year_2026/Al26_Analysis/myDSSSD/OutputFiles/B10_Stability_TC_30_FFT_0.5_0.125_1.8.root
+#OutputFile /home/francisco/Desktop/Year_2026/Al26_Analysis/myDSSSD/OutputFiles/Dummy.root
+#
+#
+STOP
+#1 General_definition_for_the_processing
+#2 By_default_we_need_toffset_and_FlightPath
+#3 Shift factor for TOF spectra, Intensities and PKUP TOF
+#4 Different_cuts_for_analysis.1_is_Curve_and_0_is_constant._1_is_for_calibrated_spectra_and_0_for_not_calibrated
+#5 Energy_Range_for_the_deposited_energy_analysis
+#Energy cuts 
+#6 Strips_to_be_discard_for_the_analysis
+#7 Reading_files_for_the_processing
+#B10
+#AmplitudeRangeCut_1.05_3.5
+#RootFiles /home/francisco/Desktop/Year_2026/Al26_Analysis/B_from_Ca41/
+#RunList /home/francisco/Desktop/Year_2026/Al26_Analysis/B_from_Ca41/Run_List.txt
+#LiF
+#AmplitudeRangeCut_1.5_6.0
+#RootFiles /home/francisco/Desktop/Year_2026/Al26_Analysis/LiF_from_Ca41/
+#RunList /home/francisco/Desktop/Year_2026/Al26_Analysis/LiF_from_Ca41/Run_List.txt
+# 1e4 1e5 2e5 3e5 4e5 5e5 6e5 7e5 8e5 9e5 10e5

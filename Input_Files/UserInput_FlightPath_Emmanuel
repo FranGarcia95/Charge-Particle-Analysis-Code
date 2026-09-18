@@ -1,0 +1,54 @@
+#1
+ProcessingMode FlightPath
+NumberSamples 1
+Samples B10
+NumberDetectors 1
+Detectors DEED
+NumberStrips 16
+#2
+TOFoffset[ns] 1800.705
+Flightpath[m] 19.1523
+#3
+ShiftFactor 1.0
+DedicatedPS 7e12 1e13
+ParasiticPS 1e12 7e12
+PKUPTOF 13272.6 13272.6
+#4
+Calibration 0
+AmplitudeRangeCut 0.95 1.45
+Constant/Curve 1
+ApplyPileUp 1
+#5
+NumberEnergyRanges 1
+EnergyRangeCut 5e-2 100
+#6
+NumberStripsDiscard 1
+StripsDiscarded 14
+#7
+Fitmode/TCmode 0
+Process/ReadFromfile 1
+InputRootFile /home/francisco/Desktop/Year_2026/Al26_Analysis/myDSSSD/OutputFiles/B10_DataProcessing_TC_30_FFT_0.5_0.125_2.2.root
+EvaluatedFlux /home/francisco/Desktop/Year_2026/Al26_Analysis/myDSSSD/Input_Files/Final_evaluated_flux_Phase4_EAR2.root
+CountingRateTC /home/francisco/Desktop/Year_2026/Al26_Analysis/myDSSSD/FlightPath_TC/B10_CountingRate_19.55m.txt
+CrossSection /home/francisco/Desktop/Year_2026/Al26_Analysis/myDSSSD/Input_Files/B10_n_alpha
+FlightPathParameters /home/francisco/Desktop/Year_2026/Al26_Analysis/myDSSSD/Input_Files/Fitting_Parameters_B10_Fit_Emmanuel
+#8
+RootFiles /home/francisco/Desktop/Year_2026/Al26_Analysis/B_from_Al26/
+RunList /home/francisco/Desktop/Year_2026/Al26_Analysis/B_from_Al26/Run_List.txt
+OutputFile /home/francisco/Desktop/Year_2026/Al26_Analysis/src_v15/B10_Processing_Emmanuel.root
+#
+#
+STOP
+#1 General_definition_for_the_processing
+#2 By_default_we_need_toffset_and_FlightPath
+#3 Shift factor for TOF spectra, Intensities and PKUP TOF
+#4 Different_cuts_for_analysis.1_is_Curve_and_0_is_constant._1_is_for_calibrated_spectra_and_0_for_not_calibrated
+#5 Energy_Range_for_the_deposited_energy_analysis
+#Energy cuts 
+#6 Strips_to_be_discard_for_the_analysis
+#7 Files for flight path calibration. If Fitmode 1, TC calibration. 
+#8 Reading_files_for_the_processing
+#RootFiles /home/francisco/Desktop/Year_2026/Al26_Analysis/LiF_from_Ca41/
+#RunList /home/francisco/Desktop/Year_2026/Al26_Analysis/LiF_from_Ca41/Run_List.txt
+#Values_From_Energy_Fit: 1911.31  m            1640.7418 ns
+#Values_From_Energy_Fit: 1915.147 +/- 1.58 m   1600 +/- 50 ns
