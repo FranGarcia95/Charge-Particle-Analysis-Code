@@ -49,6 +49,8 @@ class CoincidenceClass{
         };
 
         bool Forward_Backward;
+        float __Coincidence_Low_Window_Front_Back__, __Coincidence_High_Window_Front_Back__;
+        float __Coincidence_Low_Window_Forward_Backward__, __Coincidence_High_Window_Forward_Backward__; 
 
         std::map<int, std::vector<CoincidenceEvent>> DEED_Detector;
         std::map<int, std::vector<CoincidenceEvent>> EDET_Detector;
@@ -57,8 +59,6 @@ class CoincidenceClass{
         std::map<int, std::vector<CoincidenceEvent>> Back_Detector;
         std::map<int, std::vector<CoincidenceEvent>> Backward_Detector;
 
-        void CoincidenceBackFront(const std::map<int, std::vector<CoincidenceEvent>>& Event_Front, 
-                                  const std::map<int, std::vector<CoincidenceEvent>>& Event_Back);
         void CoincidenceDetectors(const std::map<int, std::vector<CoincidenceEvent>>& Event_Forward, 
                                   const std::map<int, std::vector<CoincidenceEvent>>& Event_Backward);
         void CoincidenceStrips(const std::map<int, std::vector<CoincidenceEvent>>& Event);

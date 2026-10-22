@@ -41,7 +41,7 @@ class DSSSDProcessing{
         void Coincidence_Processing_FrontBack(std::string Processing, std::string Rootfiles);  
         void Stability_Check(std::string Rootfiles);
         void Coincidence_Processing_Forward_Backward(std::string Processing, std::string Rootfiles);  
-        void Data_Processing(std::string Processing, std::string Rootfiles, int flag = 0);
+        void Data_Processing(std::string Processing, std::string Rootfiles, int samplenumber = 0);
         void DeadTime_Processing(std::string Rootfiles);
         TChain* Chain_Def(const char* ftree_name, std::string Rootfiles);
         TChain* Chain_SSD(const char* ftree_name, std::string Rootfiles);
@@ -65,7 +65,8 @@ class DSSSDProcessing{
         std::vector<std::string> __RunFiles__, __RunList__, __Root_Files__, __pulse_type__;
         int __NumberDet__, __Number_Strips__;
         double __Shift_Factor__;
-        std::string __Output__, __DetType__;
+        std::string __Output__;
+        std::vector<std::string> __DetType__;
         TFile* __OutFile__;
 
         //TChain *PKUP, *DEED, *EDET;

@@ -64,7 +64,8 @@ class FlightPathCalibration{
         std::vector<double> __Par_Sim_Thermal__, __Par_Sim_Dip1__, __Par_Sim_Dip2__, __Par_Sim_Dip3__, __Par_Sim_Res__;
 
         std::vector<std::string> __Sample__; 
-        std::string __Detector__;
+        std::vector<std::string> __Detector__;
+        std::string __PS_mode__;
 
         std::vector<bool> Peakstobefitted;
         bool __Readhistofromfile__;
