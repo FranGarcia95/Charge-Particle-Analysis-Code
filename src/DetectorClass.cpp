@@ -1,11 +1,15 @@
 #include "DetectorClass.h" 
 #include "CoincidenceClass.h"
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 DetectorClass::DetectorClass(UserInput *u){
 
     userInp = u;
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 DetectorClass::~DetectorClass(){
     
@@ -17,6 +21,8 @@ DetectorClass::~DetectorClass(){
     }
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DetectorClass::Inizialization(){
 
@@ -40,8 +46,10 @@ void DetectorClass::Inizialization(){
         __OutFile__ = new TFile(userInp->Get_Output_File().c_str(), "RECREATE");
     }else if(__Processing__ == "FlightPath" && !userInp->Get_Histo_From_File()){
         __OutFile__ = new TFile(userInp->Get_Output_File().c_str(), "RECREATE");
-    }else{
+    }else if(__Processing__ == "FlightPath" && userInp->Get_Histo_From_File()){
         std::cout << "Opening file to get the TOF or Energy histogram for Flight Path Calibration" << std::endl;
+    }else{
+        std::cout << "Amplitude to Energy calibration selected" << std::endl;
     }
 
     //We read or not the calibration file. Notice:
@@ -54,13 +62,15 @@ void DetectorClass::Inizialization(){
     }else if(__Calibration__ && __NumberDet__ == 1 && __Processing__ == "Coincidence"){
 
         std::vector<std::string> filename = userInp->Get_Calibration_Parameter(); 
+        userInp->Get_Strips_order(__Order_Strip_Front__, __Order_Strip_Back__);
         __Cal_Parameters_DSSSD__ = Read_Calibration_Parameters(filename[0]);
 
     }else if(__Calibration__ && __NumberDet__ == 2 && __Processing__ == "Coincidence"){
 
         std::vector<std::string> filename = userInp->Get_Calibration_Parameter(); 
-        __Cal_Parameters_SSD__ = Read_Calibration_Parameters(filename[0]);
-        __Cal_Parameters_DSSSD__ = Read_Calibration_Parameters(filename[1]);
+        userInp->Get_Strips_order(__Order_Strip_Front__, __Order_Strip_Back__);
+        __Cal_Parameters_SSD__ = Read_Calibration_Parameters(filename[1]);
+        __Cal_Parameters_DSSSD__ = Read_Calibration_Parameters(filename[0]);
 
     }
 
@@ -97,12 +107,20 @@ void DetectorClass::Inizialization(){
 
     //Here we specified which histograms have to be initialize
     if(__Processing__ == "Calibration"){
-        Histogram_Def_1D_Calibration(__Sample__, __DetType__[0]);
+        Histogram_Def_Calibration(__Sample__, __DetType__[0]);
     }else if(__Processing__ == "DeadTime"){
         Histogram_Def_DeadTime(__DetType__[0]);
     }else if(__Processing__ == "Coincidence"){
+        
+        userInp->Get_Coincidence_Amp_Window(__Coincidence_Amp_Low_Window__, __Coincidence_Amp_High_Window__);
+        
         Histogram_Def_Coincidence_Front_Back(__Sample__[0], __DetType__[0]);
         if(__NumberDet__ == 2){
+            
+            __Discard_Strips_SSD__ = userInp->Get_Broken_Strips_SSD();
+            __Amplitude_Cut_SSD__  = userInp->Get_Amplitude_Cut_SSD();
+            userInp->Get_Coincidence_Amp_Window_Forward_Backward(__Coincidence_Amp_Low_Window_2det__, __Coincidence_Amp_High_Window_2det__);
+
             Histogram_Def_Coincidence_Forward_Backward(__Sample__[0], __DetType__[0]);
         }
     }else if(__Processing__ == "DataProcessing"){
@@ -121,9 +139,15 @@ void DetectorClass::Inizialization(){
         NewCutLineDraw();
     }else if(__NewCut__ && (__Processing__ == "FlightPath" && !userInp->Get_Histo_From_File())){
         NewCutLineDraw();
+    }else if(__NewCut__ && __Processing__ == "Coincidence" && __NumberDet__ == 2){
+        NewCutLineDraw("SSD");
+    }else if(__NewCut__ && __Processing__ == "Coincidence"){
+        NewCutLineDraw();
     }
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DetectorClass::HistogramInizialization(){
 
@@ -138,7 +162,6 @@ void DetectorClass::HistogramInizialization(){
 
     }else if(__Processing__ == "DeadTime"){
 
-        __Thr_SILI__        = new TH2F*[__Number_Strips__];
         __Thr_SILI_En__     = new TH2F*[__Number_Strips__];
         __Thr_Time_Diff__   = new TH1F*[__Number_Strips__];
         __Thr_Energy_Dep__  = new TH1F*[__Number_Strips__];
@@ -159,11 +182,28 @@ void DetectorClass::HistogramInizialization(){
         __Energy_Ded_Coincidence__ = new TH2D*[__Side__.size()];
         __Energy_Par_Coincidence__ = new TH2D*[__Side__.size()];
 
-        __TOF_coincidence_Ded_1D__ = new TH1D*[__Side__.size()];
-        __TOF_coincidence_Par_1D__ = new TH1D*[__Side__.size()];
+        if(__NumberDet__ == 2){
+            __TOF_coincidence_Ded_1D__ = new TH1D*[__Side__.size() + 1];
+            __TOF_coincidence_Par_1D__ = new TH1D*[__Side__.size() + 1];
 
-        __Energy_coincidence_Ded_1D__ = new TH1D*[__Side__.size()];
-        __Energy_coincidence_Par_1D__ = new TH1D*[__Side__.size()];
+            __Energy_coincidence_Ded_1D__ = new TH1D*[__Side__.size() + 1];
+            __Energy_coincidence_Par_1D__ = new TH1D*[__Side__.size() + 1];
+
+            __Cal_Histo_All_Strips_Ded__ = new TH1F*[__Side__.size() + 1];
+            __Cal_Histo_All_Strips_Par__ = new TH1F*[__Side__.size() + 1];
+        }else{
+            __TOF_coincidence_Ded_1D__ = new TH1D*[__Side__.size()];
+            __TOF_coincidence_Par_1D__ = new TH1D*[__Side__.size()];
+
+            __Energy_coincidence_Ded_1D__ = new TH1D*[__Side__.size()];
+            __Energy_coincidence_Par_1D__ = new TH1D*[__Side__.size()];
+
+            __Cal_Histo_All_Strips_Ded__ = new TH1F*[__Side__.size()];
+            __Cal_Histo_All_Strips_Par__ = new TH1F*[__Side__.size()];
+        }
+
+        __Map_Ded_1D__  = new TH1D*[__Side__.size()]; 
+        __Map_Par_1D__  = new TH1D*[__Side__.size()];
 
         __amp_histo_coincidence__         = new TH1F**[__NumberDet__];
         if(__Calibration__) __cal_histo_coincidence__         = new TH1F**[__NumberDet__];
@@ -249,6 +289,8 @@ void DetectorClass::HistogramInizialization(){
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 std::vector<std::string> DetectorClass::Read_RunFile(std::string Runlist){
 
     std::string buffer;
@@ -267,6 +309,8 @@ std::vector<std::string> DetectorClass::Read_RunFile(std::string Runlist){
     return RunFiles;
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 std::vector<std::vector<float>> DetectorClass::Read_Calibration_Parameters(std::string filename){
     float a0, a1;
     std::ifstream ffinp(filename.c_str());
@@ -283,6 +327,8 @@ std::vector<std::vector<float>> DetectorClass::Read_Calibration_Parameters(std::
 
     return parameters;
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DetectorClass::FillingHistogramProcessing(float amp, double tof, float PulseIntensity, int detn, int Bunch, double pkuptof){
 
@@ -350,10 +396,12 @@ void DetectorClass::FillingHistogramProcessing(float amp, double tof, float Puls
                 __TOF_Ded_1D__[side]->Fill(tof - pkuptof + __TOF_Offset__);
                 __Energy_Ded_1D__[side]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__));
 
-                if(side == 0){
-                    __Map_Ded_1D__[side]->Fill(detn - 1);
-                }else if(side == 1){
-                    __Map_Ded_1D__[side]->Fill(detn - 17);
+                if(TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__) > __Energy_Cut__[0] && TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__) <= __Energy_Cut__[1]){
+                    if(side == 0){
+                        __Map_Ded_1D__[side]->Fill(detn - 1);
+                    }else if(side == 1){
+                        __Map_Ded_1D__[side]->Fill(detn - 17);
+                    }
                 }
                 
             }
@@ -397,10 +445,12 @@ void DetectorClass::FillingHistogramProcessing(float amp, double tof, float Puls
                 __TOF_Par_1D__[side]->Fill(tof - pkuptof + __TOF_Offset__, 1);
                 __Energy_Par_1D__[side]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__), 1);
 
-                if(side == 0){
-                    __Map_Par_1D__[side]->Fill(detn - 1);
-                }else if(side == 1){
-                    __Map_Par_1D__[side]->Fill(detn - 17);
+                if(TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__) > __Energy_Cut__[0] && TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__) <= __Energy_Cut__[1]){
+                    if(side == 0){
+                        __Map_Par_1D__[side]->Fill(detn - 1);
+                    }else if(side == 1){
+                        __Map_Par_1D__[side]->Fill(detn - 17);
+                    }
                 }
             }
 
@@ -444,6 +494,8 @@ void DetectorClass::FillingHistogramProcessing(float amp, double tof, float Puls
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DetectorClass::StabilityProcessing(float amp, double tof, float PulseIntensity, int detn, int Run, int Bunch, double pkuptof, double pkuparea, bool end){
 
     int side = 0;
@@ -461,8 +513,13 @@ void DetectorClass::StabilityProcessing(float amp, double tof, float PulseIntens
 
     double lowcut, highcut;
 
-    lowcut  = __Amplitude_Cut__[0];
-    highcut = __Amplitude_Cut__[1];
+    if(__NewCut__){
+        lowcut  = __Energy_Cut_Line__[0]->GetBinContent(__Energy_Cut_Line__[0]->GetXaxis()->FindBin(TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__)));
+        highcut = __Energy_Cut_Line__[1]->GetBinContent(__Energy_Cut_Line__[1]->GetXaxis()->FindBin(TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__)));
+    }else{
+        lowcut  = __Amplitude_Cut__[0];
+        highcut = __Amplitude_Cut__[1];
+    }
 
     double cutvalue;
 
@@ -480,7 +537,7 @@ void DetectorClass::StabilityProcessing(float amp, double tof, float PulseIntens
 
     double counts_Ded = 0; 
 
-    if(TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__) > 1e-3 && TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__) <= 100){
+    if(TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__) > __Energy_Cut__[0] && TOF_Energy_Convertion(__Fligt_Path__, tof - pkuptof + __TOF_Offset__) <= __Energy_Cut__[1]){
         if(cutvalue > lowcut && cutvalue < highcut){
             if(PulseIntensity > __Dedicated_PS__[0]){
 
@@ -488,6 +545,8 @@ void DetectorClass::StabilityProcessing(float amp, double tof, float PulseIntens
                     __PulseIntensity__.at("Dedicated") += PulseIntensity;
                     __Bunches__.at("Dedicated") += 1;
                     _Aux_Ded_ = Bunch;
+                    int bin = __BCT_PKUP_Ded__->GetXaxis()->FindBin(Run - 1);
+                    __BCT_PKUP_Ded__->SetBinContent(bin, PulseIntensity / pkuparea);
                 }
 
                 if(_Aux_Run_Ded_ != Run){
@@ -511,6 +570,8 @@ void DetectorClass::StabilityProcessing(float amp, double tof, float PulseIntens
                     __PulseIntensity__.at("Parasitic") += PulseIntensity;
                     __Bunches__.at("Parasitic") += 1;
                     _Aux_Par_ = Bunch;
+                    int bin = __BCT_PKUP_Par__->GetXaxis()->FindBin(Run - 1);
+                    __BCT_PKUP_Par__->SetBinContent(bin, PulseIntensity / pkuparea);
                 }
 
                 if(_Aux_Run_Par_ != Run){
@@ -532,7 +593,6 @@ void DetectorClass::StabilityProcessing(float amp, double tof, float PulseIntens
     }
 
     if(end){
-        std::cout << __Bunches__.at("Dedicated") << "   " << Run << std::endl;
         for(int i = 0; i < __Number_Strips__; i++){
             if(__Bunches__.at("Dedicated") != 0){
                 int bin = __Strip_PKUP_Ded__[i]->GetXaxis()->FindBin(Run);
@@ -546,44 +606,70 @@ void DetectorClass::StabilityProcessing(float amp, double tof, float PulseIntens
                 __Strip_Run_Par__[i]->SetBinContent(bin, __Strip_Run_Par__[i]->GetBinContent(bin) / __Bunches__.at("Parasitic"));
             }
         }
+        int bin = __BCT_PKUP_Ded__->GetXaxis()->FindBin(Run);
+        __BCT_PKUP_Ded__->SetBinContent(bin, __BCT_PKUP_Ded__->GetBinContent(bin) / __Bunches__.at("Dedicated"));
+        __BCT_PKUP_Par__->SetBinContent(bin, __BCT_PKUP_Par__->GetBinContent(bin) / __Bunches__.at("Parasitic"));
     }
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DetectorClass::NormHistogram(){
 
-    for(int k = 0; k < __Side__.size(); k++){
-        __TOF_Ded_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated")); 
-        __TOF_Par_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic")); 
-
-        __Energy_Ded_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated"));
-        __Energy_Par_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic"));
-    }
-
-    if(__PileUp_Correction__){
+    if(__NumberDet__ == 1 && __Processing__ == "Coincidence"){
         for(int k = 0; k < __Side__.size(); k++){
-            __TOF_Ded_1D_PileUp__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated")); 
-            __TOF_Par_1D_PileUp__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic")); 
+            __TOF_coincidence_Ded_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated")); 
+            __TOF_coincidence_Par_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic")); 
 
-            __Energy_Ded_1D_PileUp__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated"));
-            __Energy_Par_1D_PileUp__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic"));
+            __Energy_coincidence_Ded_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated")); 
+            __Energy_coincidence_Par_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic")); 
         }
-    }
+    }else if(__NumberDet__ == 2 && __Processing__ == "Coincidence"){
+        for(int k = 0; k < __Side__.size() + 1; k++){
+            __TOF_coincidence_Ded_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated")); 
+            __TOF_coincidence_Par_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic")); 
 
-    for(int i = 0; i < __Number_Strips__; i++){
-        for(int j = 0; j < __pulse_type__.size(); j++){
-            if(j == 0){
-                __tof_histo__[0][i]->Scale(1.0 / __PulseIntensity__.at("Dedicated"));
-                __energy_histo__[0][i]->Scale(1.0 / __PulseIntensity__.at("Dedicated"));
-            }else{
-                __tof_histo__[1][i]->Scale(1.0 / __PulseIntensity__.at("Parasitic"));
-                __energy_histo__[1][i]->Scale(1.0 / __PulseIntensity__.at("Parasitic"));
+            __Energy_coincidence_Ded_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated")); 
+            __Energy_coincidence_Par_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic")); 
+        }
+    }else{
+        for(int k = 0; k < __Side__.size(); k++){
+            __TOF_Ded_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated")); 
+            __TOF_Par_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic")); 
+
+            __Energy_Ded_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated"));
+            __Energy_Par_1D__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic"));
+        }
+
+        if(__PileUp_Correction__){
+            for(int k = 0; k < __Side__.size(); k++){
+                __TOF_Ded_1D_PileUp__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated")); 
+                __TOF_Par_1D_PileUp__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic")); 
+
+                __Energy_Ded_1D_PileUp__[k]->Scale(1.0 / __PulseIntensity__.at("Dedicated"));
+                __Energy_Par_1D_PileUp__[k]->Scale(1.0 / __PulseIntensity__.at("Parasitic"));
+            }
+        }
+
+        for(int i = 0; i < __Number_Strips__; i++){
+            for(int j = 0; j < __pulse_type__.size(); j++){
+                if(j == 0){
+                    __tof_histo__[0][i]->Scale(1.0 / __PulseIntensity__.at("Dedicated"));
+                    __energy_histo__[0][i]->Scale(1.0 / __PulseIntensity__.at("Dedicated"));
+                }else{
+                    __tof_histo__[1][i]->Scale(1.0 / __PulseIntensity__.at("Parasitic"));
+                    __energy_histo__[1][i]->Scale(1.0 / __PulseIntensity__.at("Parasitic"));
+                }
             }
         }
     }
+    
 
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DetectorClass::PileUpCorrection(){
 
@@ -600,10 +686,10 @@ void DetectorClass::PileUpCorrection(){
 
     for(int k = 0; k < __Side__.size(); k++){
 
-        __TOF_Ded_1D_PileUp_Corrected__[k] = (TH1D*)__TOF_Ded_1D__[k]->Clone(Form("Pile up corrected TOF spectra for detetector %s & sample %s. %s & Dedicated", __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
-        __TOF_Par_1D_PileUp_Corrected__[k] = (TH1D*)__TOF_Par_1D__[k]->Clone(Form("Pile up corrected TOF spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
-        __Energy_Ded_1D_PileUp_Corrected__[k] = (TH1D*)__Energy_Ded_1D__[k]->Clone(Form("Pile up corrected Energy spectra for detetector %s & sample %s. %s & Dedicated",  __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
-        __Energy_Par_1D_PileUp_Corrected__[k] = (TH1D*)__Energy_Par_1D__[k]->Clone(Form("Pile up corrected Energy spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
+        __TOF_Ded_1D_PileUp_Corrected__[k] = (TH1D*)__TOF_Ded_1D__[k]->Clone(Form("Pile up corrected TOF spectra for detector %s & sample %s. %s & Dedicated", __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
+        __TOF_Par_1D_PileUp_Corrected__[k] = (TH1D*)__TOF_Par_1D__[k]->Clone(Form("Pile up corrected TOF spectra for detector %s & sample %s. %s & Parasitic",  __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
+        __Energy_Ded_1D_PileUp_Corrected__[k] = (TH1D*)__Energy_Ded_1D__[k]->Clone(Form("Pile up corrected Energy spectra for detector %s & sample %s. %s & Dedicated",  __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
+        __Energy_Par_1D_PileUp_Corrected__[k] = (TH1D*)__Energy_Par_1D__[k]->Clone(Form("Pile up corrected Energy spectra for detector %s & sample %s. %s & Parasitic",  __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
 
         __TOF_Ded_1D_PileUp_Corrected__[k]->SetDirectory(__OutFile__);
         __TOF_Par_1D_PileUp_Corrected__[k]->SetDirectory(__OutFile__);
@@ -630,10 +716,10 @@ void DetectorClass::PileUpCorrection(){
 
     for(int k = 0; k < __Side__.size(); k++){
 
-        __TOF_Ded_Par_Ratio_1D__Before_PileUp_Corrected__[k] = (TH1D*)__TOF_Ded_1D__[k]->Clone(Form("TOF ratio between Dedicated & parasitic before PileUp correction detetector %s, sample %s & %s", __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
-        __TOF_Ded_Par_Ratio_1D__After_PileUp_Corrected__[k] = (TH1D*)__TOF_Ded_1D_PileUp_Corrected__[k]->Clone(Form("TOF ratio between Dedicated & parasitic after PileUp correction detetector %s, sample %s & %s", __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
-        __Energy_Ded_Par_Ratio_1D__Before_PileUp_Corrected__[k] = (TH1D*)__Energy_Ded_1D__[k]->Clone(Form("Energy ratio between Dedicated & parasitic before PileUp correction detetector %s, sample %s & %s", __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
-        __Energy_Ded_Par_Ratio_1D__After_PileUp_Corrected__[k] = (TH1D*)__Energy_Ded_1D_PileUp_Corrected__[k]->Clone(Form("Energy ratio between Dedicated & parasitic after PileUp correction detetector %s, sample %s & %s", __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
+        __TOF_Ded_Par_Ratio_1D__Before_PileUp_Corrected__[k] = (TH1D*)__TOF_Ded_1D__[k]->Clone(Form("TOF ratio between Dedicated & Parasitic before PileUp correction detector %s, sample %s & %s", __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
+        __TOF_Ded_Par_Ratio_1D__After_PileUp_Corrected__[k] = (TH1D*)__TOF_Ded_1D_PileUp_Corrected__[k]->Clone(Form("TOF ratio between Dedicated & Parasitic after PileUp correction detector %s, sample %s & %s", __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
+        __Energy_Ded_Par_Ratio_1D__Before_PileUp_Corrected__[k] = (TH1D*)__Energy_Ded_1D__[k]->Clone(Form("Energy ratio between Dedicated & Parasitic before PileUp correction detector %s, sample %s & %s", __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
+        __Energy_Ded_Par_Ratio_1D__After_PileUp_Corrected__[k] = (TH1D*)__Energy_Ded_1D_PileUp_Corrected__[k]->Clone(Form("Energy ratio between Dedicated & Parasitic after PileUp correction detector %s, sample %s & %s", __Side__[k].c_str(), __Sample__[0].c_str(), __DetType__[0].c_str()));
 
         __TOF_Ded_Par_Ratio_1D__Before_PileUp_Corrected__[k + __Side__.size()] = (TH1D*)__TOF_Par_1D__[k]->Clone();
         __TOF_Ded_Par_Ratio_1D__After_PileUp_Corrected__[k + __Side__.size()] = (TH1D*)__TOF_Par_1D_PileUp_Corrected__[k]->Clone();
@@ -669,6 +755,8 @@ void DetectorClass::PileUpCorrection(){
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DetectorClass::CalibrationProcessing(float amp, double tof, float PulseIntensity, int detn, double pkuptof, int samplenumber){
     
     if(pkuptof == 0 && PulseIntensity > __Dedicated_PS__[0]){
@@ -685,24 +773,36 @@ void DetectorClass::CalibrationProcessing(float amp, double tof, float PulseInte
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DetectorClass::DeadTimeCorrection(float amp1, float amp2, double tof1, double tof2, int detn, double pkuptof){
     
-    double TOF1 = TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__);
-    double TOF2 = TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__);
+    double Energy_1 = TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__);
+    double Energy_2 = TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__);
     double energy1 = __Cal_Parameters__[detn - 1][0] + amp1 * __Cal_Parameters__[detn - 1][1];
     double energy2 = __Cal_Parameters__[detn - 1][0] + amp2 * __Cal_Parameters__[detn - 1][1];
 
-    if(TOF1 < 10000 && TOF2 < 10000){
+    double lowcut, highcut;
+
+    if(__NewCut__){
+        lowcut  = __Energy_Cut_Line__[0]->GetBinContent(__Energy_Cut_Line__[0]->GetXaxis()->FindBin(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__)));
+        highcut = __Energy_Cut_Line__[1]->GetBinContent(__Energy_Cut_Line__[1]->GetXaxis()->FindBin(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__)));
+    }else{
+        lowcut  = __Amplitude_Cut__[0];
+        highcut = __Amplitude_Cut__[1];
+    }
+
+    if((Energy_1 > __Energy_Cut__[0] && Energy_1 < __Energy_Cut__[1]) && (Energy_2 > __Energy_Cut__[0] && Energy_2 < __Energy_Cut__[1])){
 
         __Dead_Time__[detn - 1]->Fill(tof2 - tof1);
 
-        if(energy1 > 0.6){
+        if((energy1 > lowcut && energy1 < highcut) && energy2 < highcut){
             __Thr_Time_Diff__[detn - 1]->Fill(tof2 - tof1);
-            __Thr_SILI__[detn- 1]->Fill(tof2 - tof1, energy1);
-        }
-        __Thr_SILI_En__[detn - 1]->Fill(energy1, energy2);
 
-        if((tof2 - tof1) < 2000){
+            __Thr_SILI_En__[detn - 1]->Fill(energy1, energy2);
+        }
+
+        if((tof2 - tof1) <  userInp->Get_Maximum_Time_Diff__()){
             __Thr_Energy_Dep__[detn- 1]->Fill(energy2);
         }
 
@@ -710,7 +810,9 @@ void DetectorClass::DeadTimeCorrection(float amp1, float amp2, double tof1, doub
 
 }
 
-void DetectorClass::CoincidenceProcessing(float amp1, float amp2, int detn1, int detn2, double tof1, double tof2, double pulseintensity, double pkuptof, bool forwardbackward){
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DetectorClass::CoincidenceProcessing(float amp1, float amp2, int detn1, int detn2, double tof1, double tof2, double pulseintensity, int Bunch, double pkuptof, bool forwardbackward){
 
     bool discard_Front = false;
     for(int k = 0; k < __Discard_Strips__.size(); k++){
@@ -726,117 +828,196 @@ void DetectorClass::CoincidenceProcessing(float amp1, float amp2, int detn1, int
         }
     }
 
-    double lowcut, highcut;
+    bool discard_Forward = false;
+    if(forwardbackward){
+        for(int k = 0; k < __Discard_Strips_SSD__.size(); k++){
+            if(detn2 == __Discard_Strips_SSD__[k]){
+                discard_Forward = true;
+            }
+        }
+    }
 
-    if(__NewCut__){
-        lowcut  = __Amplitude_Cut__[0] + TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__)/1000;
-        highcut = __Amplitude_Cut__[1] + TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__)/1000;
+    double lowcut, highcut, lowcut_forward, highcut_forward;
+
+    if(__NewCut__ && forwardbackward){
+        lowcut  = __Energy_Cut_Line__[0]->GetBinContent(__Energy_Cut_Line__[0]->GetXaxis()->FindBin(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__)));
+        highcut = __Energy_Cut_Line__[1]->GetBinContent(__Energy_Cut_Line__[1]->GetXaxis()->FindBin(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__)));
+        lowcut_forward  = __Energy_Cut_Line__[2]->GetBinContent(__Energy_Cut_Line__[2]->GetXaxis()->FindBin(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__)));
+        highcut_forward = __Energy_Cut_Line__[3]->GetBinContent(__Energy_Cut_Line__[3]->GetXaxis()->FindBin(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__)));
+    }else if(__NewCut__){
+        lowcut  = __Energy_Cut_Line__[0]->GetBinContent(__Energy_Cut_Line__[0]->GetXaxis()->FindBin(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__)));
+        highcut = __Energy_Cut_Line__[1]->GetBinContent(__Energy_Cut_Line__[1]->GetXaxis()->FindBin(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__)));
+    }else if(forwardbackward){
+        lowcut  = __Amplitude_Cut_SSD__[0];
+        highcut = __Amplitude_Cut_SSD__[1];
     }else{
         lowcut  = __Amplitude_Cut__[0];
         highcut = __Amplitude_Cut__[1];
     }
 
-    if(pkuptof == 0 && pulseintensity > 7e12){
-        pkuptof = 13272.6;
-    }else if(pkuptof == 0 && pulseintensity > 1e12 && pulseintensity < 7e12){
-        pkuptof = 12743.5;
+    double cutvalue_front, cutvalue_back, cutvalue_forward;
+
+    if(!forwardbackward){
+        if(__Calibration__){
+            cutvalue_front = __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1];
+            cutvalue_back  = __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1];
+        }else{
+            cutvalue_front = amp1;
+            cutvalue_back  = amp2;
+        }
+    }else{
+        if(__Calibration__){
+            cutvalue_forward  = __Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1];
+            cutvalue_front = __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1];
+        }else{
+            cutvalue_forward = amp1;
+            cutvalue_front  = amp2;
+        }
+    }
+
+    if(pkuptof == 0 && pulseintensity > __Dedicated_PS__[0]){
+        pkuptof = __PKUP_Flash__[0];
+    }else if(pkuptof == 0 && pulseintensity > __Parasitic_PS__[0] && pulseintensity < __Parasitic_PS__[1]){
+        pkuptof = __PKUP_Flash__[1];
     }
 
     double energycut_1 = TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__);
     double energycut_2 = TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__);
+
     if(!forwardbackward){
-
         if ((energycut_1 > __Energy_Cut__[0] && energycut_1 < __Energy_Cut__[1]) ||
-        (energycut_2 > __Energy_Cut__[0] && energycut_2 < __Energy_Cut__[1])) 
-            __Diff_Time_Front_Back__->Fill(tof1 - tof2);
-
-        if(pulseintensity < 7e12){
-
+            (energycut_2 > __Energy_Cut__[0] && energycut_2 < __Energy_Cut__[1])) {
             if(!discard_Back && !discard_Front){
-                if(__Calibration__){
-                    __TOF_Ded_Coincidence__[0]->Fill(tof1 - pkuptof + __TOF_Offset__, __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
-                    __Energy_Ded_Coincidence__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
-                    __TOF_Ded_Coincidence__[1]->Fill(tof2 - pkuptof + __TOF_Offset__, __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
-                    __Energy_Ded_Coincidence__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__), __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
-                }else{
-                    __TOF_Ded_Coincidence__[0]->Fill(tof1 - pkuptof + __TOF_Offset__, amp1);
-                    __Energy_Ded_Coincidence__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), amp1);
-                    __TOF_Ded_Coincidence__[1]->Fill(tof2 - pkuptof + __TOF_Offset__, amp2);
-                    __Energy_Ded_Coincidence__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__), amp2);
-                }
+                __Diff_Time_Front_Back__->Fill(tof2 - tof1);
+                __Diff_Amp_Front_Back__->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1] -
+                                            (__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]));
+                __Diff_Amp_Time_Front_Back__->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1] -
+                                                (__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]), tof2 - tof1);
             }
-
-            if ((energycut_1 > __Energy_Cut__[0] && energycut_1 < __Energy_Cut__[1]) || 
-                (energycut_2 > __Energy_Cut__[0] && energycut_2 < __Energy_Cut__[1])){
-
-                if(!discard_Back && !discard_Front){
-                    __Energy_Front_Back_Par__->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1], __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
-                }
-
-                __Coincidence_Par__->Fill(detn1 - 1, detn2 - 1  - (__Number_Strips__ - 16));
-                __amp_histo_coincidence__[0][detn1 - 1]->Fill(amp1);
-                __cal_histo_coincidence__[0][detn1 - 1]->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
-                __amp_histo_coincidence__[0][detn2 - 1]->Fill(amp2);
-                __cal_histo_coincidence__[0][detn2 - 1]->Fill(__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
-            } 
-            
-            if(amp1 > lowcut && amp1 < highcut){
-                __TOF_coincidence_Par_1D__[0]->Fill(tof1 - pkuptof + __TOF_Offset__);
-                __Energy_coincidence_Par_1D__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__));
-                __TOF_coincidence_Par_1D__[1]->Fill(tof2 - pkuptof + __TOF_Offset__);
-                __Energy_coincidence_Par_1D__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__));
-            }
-
-        }else{
-
-            if(!discard_Back && !discard_Front){
-                if(__Calibration__){
-                    __TOF_Par_Coincidence__[0]->Fill(tof1 - pkuptof + __TOF_Offset__, __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
-                    __Energy_Par_Coincidence__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
-                    __TOF_Par_Coincidence__[1]->Fill(tof2 - pkuptof + __TOF_Offset__, __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
-                    __Energy_Par_Coincidence__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__), __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
-                }else{
-                    __TOF_Par_Coincidence__[0]->Fill(tof1 - pkuptof + __TOF_Offset__, amp1);
-                    __Energy_Par_Coincidence__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), amp1);
-                    __TOF_Par_Coincidence__[1]->Fill(tof2 - pkuptof + __TOF_Offset__, amp2);
-                    __Energy_Par_Coincidence__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__), amp2);
-                }
-            }
-
-            if ((energycut_1 > __Energy_Cut__[0] && energycut_1 < __Energy_Cut__[1]) ||
-            (energycut_2 > __Energy_Cut__[0] && energycut_2 < __Energy_Cut__[1])){
-                if(!discard_Back && !discard_Front){
-                    __Energy_Front_Back_Ded__->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1], __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
-                }
-            
-                __Coincidence_Ded__->Fill(detn1 - 1, detn2 - 1 - (__Number_Strips__ - 16));
-                __amp_histo_coincidence__[0][detn1 - 1]->Fill(amp1);
-                __cal_histo_coincidence__[0][detn1 - 1]->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
-                __amp_histo_coincidence__[0][detn2 - 1]->Fill(amp2);
-                __cal_histo_coincidence__[0][detn2 - 1]->Fill(__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
-
-            }
-            
-            if(amp1 > lowcut && amp1 < highcut){
-                __TOF_coincidence_Ded_1D__[0]->Fill(tof1 - pkuptof + __TOF_Offset__);
-                __Energy_coincidence_Ded_1D__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__));
-                __TOF_coincidence_Ded_1D__[1]->Fill(tof2 - pkuptof + __TOF_Offset__);
-                __Energy_coincidence_Ded_1D__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__));
-            }
-
         }
-    
+
+        double energy_1 = __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1];
+        double energy_2 = __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1];
+        if((energy_1  - energy_2) <= __Coincidence_Amp_High_Window__ && (energy_1  - energy_2) >= __Coincidence_Amp_Low_Window__){
+            if(pulseintensity > __Dedicated_PS__[0]){
+
+                if(!discard_Back && !discard_Front){
+                    if(__Calibration__){
+                        __TOF_Ded_Coincidence__[0]->Fill(tof1 - pkuptof + __TOF_Offset__, __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                        __Energy_Ded_Coincidence__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                        __TOF_Ded_Coincidence__[1]->Fill(tof2 - pkuptof + __TOF_Offset__, __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                        __Energy_Ded_Coincidence__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__), __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                    }else{
+                        __TOF_Ded_Coincidence__[0]->Fill(tof1 - pkuptof + __TOF_Offset__, amp1);
+                        __Energy_Ded_Coincidence__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), amp1);
+                        __TOF_Ded_Coincidence__[1]->Fill(tof2 - pkuptof + __TOF_Offset__, amp2);
+                        __Energy_Ded_Coincidence__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__), amp2);
+                    }
+                }
+
+                if ((energycut_1 > __Energy_Cut__[0] && energycut_1 < __Energy_Cut__[1]) || 
+                    (energycut_2 > __Energy_Cut__[0] && energycut_2 < __Energy_Cut__[1])){
+
+                    if((!discard_Back && !discard_Front) && (cutvalue_front > lowcut && cutvalue_front < highcut) && (cutvalue_back > lowcut && cutvalue_back < highcut)){
+                        __Energy_Front_Back_Ded__->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1], __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                        __Coincidence_Ded__->Fill(detn1 - 1, detn2 - 1  - (__Number_Strips__ - 16));
+                        __Coincidence_ReMap_Ded__->Fill(__Order_Strip_Front__[detn1  - 1] - 1, __Order_Strip_Back__[detn2  - 17] - 17);
+                        __Map_Ded_1D__[0]->Fill(detn1 - 1);
+                        __Map_Ded_1D__[1]->Fill(detn2 - 1 - (__Number_Strips__ - 16));
+                    }
+
+                    __amp_histo_coincidence__[0][detn1 - 1]->Fill(amp1);
+                    __cal_histo_coincidence__[0][detn1 - 1]->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                    __amp_histo_coincidence__[0][detn2 - 1]->Fill(amp2);
+                    __cal_histo_coincidence__[0][detn2 - 1]->Fill(__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                    __Cal_Histo_All_Strips_Ded__[0]->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                    __Cal_Histo_All_Strips_Ded__[1]->Fill(__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                } 
+                
+                if((cutvalue_front > lowcut && cutvalue_front < highcut) && (cutvalue_back > lowcut && cutvalue_back < highcut)){
+                    if(!discard_Back && !discard_Front){
+                        __TOF_coincidence_Ded_1D__[0]->Fill(tof1 - pkuptof + __TOF_Offset__);
+                        __Energy_coincidence_Ded_1D__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__));
+                        __TOF_coincidence_Ded_1D__[1]->Fill(tof2 - pkuptof + __TOF_Offset__);
+                        __Energy_coincidence_Ded_1D__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__));
+                    }
+                }
+
+                if(_Aux_ != Bunch){
+                    __PulseIntensity__.at("Dedicated") += pulseintensity;
+                    __Bunches__.at("Dedicated") += 1;
+                    _Aux_ = Bunch;
+                }
+
+            }else if(pulseintensity > __Parasitic_PS__[0] && pulseintensity < __Parasitic_PS__[1]){
+
+                if(!discard_Back && !discard_Front){
+                    if(__Calibration__){
+                        __TOF_Par_Coincidence__[0]->Fill(tof1 - pkuptof + __TOF_Offset__, __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                        __Energy_Par_Coincidence__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                        __TOF_Par_Coincidence__[1]->Fill(tof2 - pkuptof + __TOF_Offset__, __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                        __Energy_Par_Coincidence__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__), __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                    }else{
+                        __TOF_Par_Coincidence__[0]->Fill(tof1 - pkuptof + __TOF_Offset__, amp1);
+                        __Energy_Par_Coincidence__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), amp1);
+                        __TOF_Par_Coincidence__[1]->Fill(tof2 - pkuptof + __TOF_Offset__, amp2);
+                        __Energy_Par_Coincidence__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__), amp2);
+                    }
+                }
+
+                if ((energycut_1 > __Energy_Cut__[0] && energycut_1 < __Energy_Cut__[1]) ||
+                (energycut_2 > __Energy_Cut__[0] && energycut_2 < __Energy_Cut__[1])){
+                    if((!discard_Back && !discard_Front) && (cutvalue_front > lowcut && cutvalue_front < highcut) && (cutvalue_back > lowcut && cutvalue_back < highcut)){
+                        __Energy_Front_Back_Par__->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1], __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                        __Coincidence_Par__->Fill(detn1 - 1, detn2 - 1 - (__Number_Strips__ - 16));
+                        __Coincidence_ReMap_Par__->Fill(__Order_Strip_Front__[detn1  - 1] - 1, __Order_Strip_Back__[detn2  - 17] - 17);
+                        __Map_Par_1D__[0]->Fill(detn1 - 1);
+                        __Map_Par_1D__[1]->Fill(detn2 - 1 - (__Number_Strips__ - 16));
+                    }
+                
+                    __amp_histo_coincidence__[0][detn1 - 1]->Fill(amp1);
+                    __cal_histo_coincidence__[0][detn1 - 1]->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                    __amp_histo_coincidence__[0][detn2 - 1]->Fill(amp2);
+                    __cal_histo_coincidence__[0][detn2 - 1]->Fill(__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                    __Cal_Histo_All_Strips_Par__[0]->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                    __Cal_Histo_All_Strips_Par__[1]->Fill(__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                }
+
+                if((cutvalue_front > lowcut && cutvalue_front < highcut) && (cutvalue_back > lowcut && cutvalue_back < highcut)){
+                    if(!discard_Back && !discard_Front){
+                        __TOF_coincidence_Par_1D__[0]->Fill(tof1 - pkuptof + __TOF_Offset__);
+                        __Energy_coincidence_Par_1D__[0]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__));
+                        __TOF_coincidence_Par_1D__[1]->Fill(tof2 - pkuptof + __TOF_Offset__);
+                        __Energy_coincidence_Par_1D__[1]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__));
+                    }
+                }
+
+                if(_Aux_ != Bunch){
+                    __PulseIntensity__.at("Parasitic") += pulseintensity;
+                    __Bunches__.at("Parasitic") += 1;
+                    _Aux_ = Bunch;
+                }
+            }
+        }
     }else{
 
-        if ((energycut_1 > __Energy_Cut__[0] && energycut_1 < __Energy_Cut__[1]) || (energycut_2 > __Energy_Cut__[0] && energycut_2 < __Energy_Cut__[1])) 
-            __Diff_Time_Forward_Backward__->Fill(tof1 - tof2);
-
-        if(pulseintensity < 7e12){
-
+        if ((energycut_1 > __Energy_Cut__[0] && energycut_1 < __Energy_Cut__[1]) || 
+            (energycut_2 > __Energy_Cut__[0] && energycut_2 < __Energy_Cut__[1])){
             if(!discard_Back && !discard_Front){
+                __Diff_Time_Forward_Backward__->Fill(tof2 - tof1);
+                __Diff_Amp_Forward_Backward__->Fill(__Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1] -
+                                                   (__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]));
+                __Diff_Amp_Time_Forward_Backward__->Fill(__Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1] -
+                                                        (__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]), tof2 - tof1);
+            }
+        } 
+
+        if((pulseintensity > __Dedicated_PS__[0])){
+
+            if(!discard_Forward && !discard_Front){
                 if(__Calibration__){
-                    __TOF_Ded_Coincidence__[2]->Fill(tof1 - pkuptof + __TOF_Offset__, __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
-                    __Energy_Ded_Coincidence__[2]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                    __TOF_Ded_Coincidence__[2]->Fill(tof1 - pkuptof + __TOF_Offset__, __Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1]);
+                    __Energy_Ded_Coincidence__[2]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), __Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1]);
                 }else{
                     __TOF_Ded_Coincidence__[2]->Fill(tof1 - pkuptof + __TOF_Offset__, amp1);
                     __Energy_Ded_Coincidence__[2]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), amp1);
@@ -846,26 +1027,41 @@ void DetectorClass::CoincidenceProcessing(float amp1, float amp2, int detn1, int
             if ((energycut_1 > __Energy_Cut__[0] && energycut_1 < __Energy_Cut__[1]) || 
                 (energycut_2 > __Energy_Cut__[0] && energycut_2 < __Energy_Cut__[1])){
 
-                if(!discard_Back && !discard_Front){
-                    __Energy_Forward_Backward_Par__->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1], __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                if((!discard_Forward && !discard_Front) && (cutvalue_forward > lowcut_forward && cutvalue_forward < highcut_forward) && (cutvalue_front > lowcut && cutvalue_front < highcut)){
+                    __Energy_Forward_Backward_Ded__->Fill(__Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1], __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                    __Coincidence_Ded_Forward_Backward__->Fill(detn1 - 1, detn2 - 1);
+                    __Map_Ded_1D__[2]->Fill(detn1 - 1);
                 }
 
-                __Coincidence_Par_Forward_Backward__->Fill(detn1 - 1, detn2 - 1);
                 __amp_histo_coincidence__[1][detn1 - 1]->Fill(amp1);
-                __cal_histo_coincidence__[1][detn1 - 1]->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                __cal_histo_coincidence__[1][detn1 - 1]->Fill(__Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1]);
+                __Cal_Histo_All_Strips_Ded__[2]->Fill(__Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1]);
+                __Cal_Histo_All_Strips_Ded__[3]->Fill(__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);   
+                __Cal_Histo_Add_Peaks_Ded__->Fill(__Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1] + 
+                                                  __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
             } 
             
-            if(amp1 > lowcut && amp1 < highcut){
-                __TOF_coincidence_Par_1D__[2]->Fill(tof1 - pkuptof + __TOF_Offset__);
-                __Energy_coincidence_Par_1D__[2]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__));
+            if((cutvalue_forward > lowcut_forward && cutvalue_forward < highcut_forward) && (cutvalue_front > lowcut && cutvalue_front < highcut)){
+                if(!discard_Forward && !discard_Front){
+                    __TOF_coincidence_Ded_1D__[2]->Fill(tof1 - pkuptof + __TOF_Offset__);
+                    __Energy_coincidence_Ded_1D__[2]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__));
+                    __TOF_coincidence_Ded_1D__[3]->Fill(tof2 - pkuptof + __TOF_Offset__);
+                    __Energy_coincidence_Ded_1D__[3]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__));
+                }
             }
 
-        }else{
+            if(_Aux_ != Bunch){
+                __PulseIntensity__.at("Dedicated") += pulseintensity;
+                __Bunches__.at("Dedicated") += 1;
+                _Aux_ = Bunch;
+            }
 
-            if(!discard_Back && !discard_Front){
+        }else if(pulseintensity > __Parasitic_PS__[0] && pulseintensity < __Parasitic_PS__[1]){
+
+            if(!discard_Forward && !discard_Front){
                 if(__Calibration__){
-                    __TOF_Par_Coincidence__[2]->Fill(tof1 - pkuptof + __TOF_Offset__, __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
-                    __Energy_Par_Coincidence__[2]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), __Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                    __TOF_Par_Coincidence__[2]->Fill(tof1 - pkuptof + __TOF_Offset__, __Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1]);
+                    __Energy_Par_Coincidence__[2]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), __Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1]);
                 }else{
                     __TOF_Par_Coincidence__[2]->Fill(tof1 - pkuptof + __TOF_Offset__, amp1);
                     __Energy_Par_Coincidence__[2]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__), amp1);
@@ -873,19 +1069,34 @@ void DetectorClass::CoincidenceProcessing(float amp1, float amp2, int detn1, int
             }
 
             if ((energycut_1 > __Energy_Cut__[0] && energycut_1 < __Energy_Cut__[1]) || (energycut_2 > __Energy_Cut__[0] && energycut_2 < __Energy_Cut__[1])){
-                if(!discard_Back && !discard_Front){
-                    __Energy_Forward_Backward_Ded__->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1], __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                if((!discard_Forward && !discard_Front) && (cutvalue_forward > lowcut_forward && cutvalue_forward < highcut_forward) && (cutvalue_front > lowcut && cutvalue_front < highcut)){
+                    __Energy_Forward_Backward_Par__->Fill(__Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1], __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
+                    __Coincidence_Par_Forward_Backward__->Fill(detn1 - 1, detn2 - 1);
+                    __Map_Par_1D__[2]->Fill(detn1 - 1);
                 }
-            
-                __Coincidence_Ded_Forward_Backward__->Fill(detn1 - 1, detn2 - 1);
+        
                 __amp_histo_coincidence__[1][detn1 - 1]->Fill(amp1);
-                __cal_histo_coincidence__[1][detn1 - 1]->Fill(__Cal_Parameters_DSSSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_DSSSD__[detn1 - 1][1]);
+                __cal_histo_coincidence__[1][detn1 - 1]->Fill(__Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1]);
+                __Cal_Histo_All_Strips_Par__[2]->Fill(__Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1]);
+                __Cal_Histo_All_Strips_Par__[3]->Fill(__Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]); 
+                __Cal_Histo_Add_Peaks_Par__->Fill(__Cal_Parameters_SSD__[detn1 - 1][0] + amp1 * __Cal_Parameters_SSD__[detn1 - 1][1] + 
+                                                  __Cal_Parameters_DSSSD__[detn2 - 1][0] + amp2 * __Cal_Parameters_DSSSD__[detn2 - 1][1]);
 
             }
             
-            if(amp1 > lowcut && amp1 < highcut){
-                __TOF_coincidence_Ded_1D__[2]->Fill(tof1 - pkuptof + __TOF_Offset__);
-                __Energy_coincidence_Ded_1D__[2]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__));
+            if((cutvalue_forward > lowcut_forward && cutvalue_forward < highcut_forward) && (cutvalue_front > lowcut && cutvalue_front < highcut)){
+                if(!discard_Forward && !discard_Front){
+                    __TOF_coincidence_Par_1D__[2]->Fill(tof1 - pkuptof + __TOF_Offset__);
+                    __Energy_coincidence_Par_1D__[2]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof1 - pkuptof + __TOF_Offset__));
+                    __TOF_coincidence_Par_1D__[3]->Fill(tof2 - pkuptof + __TOF_Offset__);
+                    __Energy_coincidence_Par_1D__[3]->Fill(TOF_Energy_Convertion(__Fligt_Path__, tof2 - pkuptof + __TOF_Offset__));
+                }
+            }
+
+            if(_Aux_ != Bunch){
+                __PulseIntensity__.at("Parasitic") += pulseintensity;
+                __Bunches__.at("Parasitic") += 1;
+                _Aux_ = Bunch;
             }
 
         }
@@ -893,6 +1104,8 @@ void DetectorClass::CoincidenceProcessing(float amp1, float amp2, int detn1, int
     }
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 std::vector<double> DetectorClass::Histo_Bins(float fminvalue, float fmaxvalue, int fnumbins, bool bool_log){
     // Input verification
@@ -931,55 +1144,59 @@ std::vector<double> DetectorClass::Histo_Bins(float fminvalue, float fmaxvalue, 
     return bins;
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 double DetectorClass::TOF_Energy_Convertion(double L0, double tTOF){
     return 0.5*939.565330e6/(0.299792458*0.299792458)*(L0/tTOF)*(L0/tTOF);
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DetectorClass::Histogram_Def_2D(std::string __sample__, std::string __SILI__){
 
     if(__Calibration__){
         for(int i = 0; i < __Side__.size(); i++){
-            __TOF_Ded__[i] = new TH2D(Form("TOF vs Amp spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("TOF vs Amp spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __TOF_Ded__[i] = new TH2D(Form("TOF vs Amp spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("TOF vs Amp spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __tof__[2], __tof_bin__.data(), __amp_cal__[2], __amp_cal_bin__.data());
             __TOF_Ded__[i]->SetDirectory(__OutFile__);
 
-            __TOF_Par__[i] = new TH2D(Form("TOF vs Amp spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("TOF vs Amp spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __TOF_Par__[i] = new TH2D(Form("TOF vs Amp spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("TOF vs Amp spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __tof__[2], __tof_bin__.data(), __amp_cal__[2], __amp_cal_bin__.data());
             __TOF_Par__[i]->SetDirectory(__OutFile__);
 
 
-            __Energy_Ded__[i] = new TH2D(Form("Energy vs Amp spectra for detetector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                        Form("Energy vs Amp spectra for detetector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __Energy_Ded__[i] = new TH2D(Form("Energy vs Amp spectra for detector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                        Form("Energy vs Amp spectra for detector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                         __energy__[2], __energy_bin__.data(), __amp_cal__[2], __amp_cal_bin__.data());
             __Energy_Ded__[i]->SetDirectory(__OutFile__);
 
-            __Energy_Par__[i] = new TH2D(Form("Energy vs Amp spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                        Form("Energy vs Amp spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __Energy_Par__[i] = new TH2D(Form("Energy vs Amp spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                        Form("Energy vs Amp spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                         __energy__[2], __energy_bin__.data(), __amp_cal__[2], __amp_cal_bin__.data());
             __Energy_Par__[i]->SetDirectory(__OutFile__);
         }
     }else{
         for(int i = 0; i < __Side__.size(); i++){
-            __TOF_Ded__[i] = new TH2D(Form("TOF vs Amp spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("TOF vs Amp spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __TOF_Ded__[i] = new TH2D(Form("TOF vs Amp spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("TOF vs Amp spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __tof__[2], __tof_bin__.data(), __amp_ch__[2], __amp_ch_bin__.data());
             __TOF_Ded__[i]->SetDirectory(__OutFile__);
 
-            __TOF_Par__[i] = new TH2D(Form("TOF vs Amp spectra for detetector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("TOF vs Amp spectra for detetector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __TOF_Par__[i] = new TH2D(Form("TOF vs Amp spectra for detector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("TOF vs Amp spectra for detector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __tof__[2], __tof_bin__.data(), __amp_ch__[2], __amp_ch_bin__.data());
             __TOF_Par__[i]->SetDirectory(__OutFile__);
 
 
-            __Energy_Ded__[i] = new TH2D(Form("Energy vs Amp spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                        Form("Energy vs Amp spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __Energy_Ded__[i] = new TH2D(Form("Energy vs Amp spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                        Form("Energy vs Amp spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                         __energy__[2], __energy_bin__.data(), __amp_ch__[2], __amp_ch_bin__.data());
             __Energy_Ded__[i]->SetDirectory(__OutFile__);
 
-            __Energy_Par__[i] = new TH2D(Form("Energy vs Amp spectra for detetector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                        Form("Energy vs Amp spectra for detetector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __Energy_Par__[i] = new TH2D(Form("Energy vs Amp spectra for detector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                        Form("Energy vs Amp spectra for detector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                         __energy__[2], __energy_bin__.data(), __amp_ch__[2], __amp_ch_bin__.data());
             __Energy_Par__[i]->SetDirectory(__OutFile__);
         }
@@ -987,63 +1204,65 @@ void DetectorClass::Histogram_Def_2D(std::string __sample__, std::string __SILI_
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DetectorClass::Histogram_Def_1D(std::string __sample__, std::string __SILI__){
    
     for (int i = 0; i < __Side__.size(); i++){
-        __Map_Ded_1D__[i] = new TH1D(Form("Strip map for detetector %s & %s. Dedicated", __SILI__.c_str(), __Side__[i].c_str()), 
-                                Form("Strip map for detetector %s & %s. Dedicated", __SILI__.c_str(), __Side__[i].c_str()), 
+        __Map_Ded_1D__[i] = new TH1D(Form("Strip map for detector %s & %s. Dedicated", __SILI__.c_str(), __Side__[i].c_str()), 
+                                Form("Strip map for detector %s & %s. Dedicated", __SILI__.c_str(), __Side__[i].c_str()), 
                                 16, 0, 16);
         __Map_Ded_1D__[i]->SetDirectory(__OutFile__);
 
-        __Map_Par_1D__[i] = new TH1D(Form("Strip map for detetector %s & %s. Parasitic", __SILI__.c_str(), __Side__[i].c_str()), 
-                                Form("Strip map for detetector %s & %s. Parasitic", __SILI__.c_str(), __Side__[i].c_str()), 
+        __Map_Par_1D__[i] = new TH1D(Form("Strip map for detector %s & %s. Parasitic", __SILI__.c_str(), __Side__[i].c_str()), 
+                                Form("Strip map for detector %s & %s. Parasitic", __SILI__.c_str(), __Side__[i].c_str()), 
                                 16, 0, 16);
         __Map_Par_1D__[i]->SetDirectory(__OutFile__);
     }
     
     for(int i = 0; i < __Side__.size(); i++){
-        __TOF_Ded_1D__[i] = new TH1D(Form("TOF spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                Form("TOF spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+        __TOF_Ded_1D__[i] = new TH1D(Form("TOF spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                Form("TOF spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                 __tof__[2], __tof_bin__.data());
         __TOF_Ded_1D__[i]->SetDirectory(__OutFile__);
 
-        __TOF_Par_1D__[i] = new TH1D(Form("TOF spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                Form("TOF spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+        __TOF_Par_1D__[i] = new TH1D(Form("TOF spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                Form("TOF spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                 __tof__[2], __tof_bin__.data());
         __TOF_Par_1D__[i]->SetDirectory(__OutFile__);
 
 
-        __Energy_Ded_1D__[i] = new TH1D(Form("Energy spectra for detetector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("Energy spectra for detetector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+        __Energy_Ded_1D__[i] = new TH1D(Form("Energy spectra for detector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("Energy spectra for detector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __energy__[2], __energy_bin__.data());
         __Energy_Ded_1D__[i]->SetDirectory(__OutFile__);
 
-        __Energy_Par_1D__[i] = new TH1D(Form("Energy spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("Energy spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+        __Energy_Par_1D__[i] = new TH1D(Form("Energy spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("Energy spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __energy__[2], __energy_bin__.data());
         __Energy_Par_1D__[i]->SetDirectory(__OutFile__);
     }
 
     if(__PileUp_Correction__){
         for(int i = 0; i < __Side__.size(); i++){
-            __TOF_Ded_1D_PileUp__[i] = new TH1D(Form("Pile up TOF spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("Pile up TOF spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __TOF_Ded_1D_PileUp__[i] = new TH1D(Form("Pile up TOF spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("Pile up TOF spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __tof__[2], __tof_bin__.data());
             __TOF_Ded_1D_PileUp__[i]->SetDirectory(__OutFile__);
 
-            __TOF_Par_1D_PileUp__[i] = new TH1D(Form("Pile up TOF spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("Pile up TOF spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __TOF_Par_1D_PileUp__[i] = new TH1D(Form("Pile up TOF spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("Pile up TOF spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __tof__[2], __tof_bin__.data());
             __TOF_Par_1D_PileUp__[i]->SetDirectory(__OutFile__);
 
 
-            __Energy_Ded_1D_PileUp__[i] = new TH1D(Form("Pile up Energy spectra for detetector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                        Form("Pile up Energy spectra for detetector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __Energy_Ded_1D_PileUp__[i] = new TH1D(Form("Pile up Energy spectra for detector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                        Form("Pile up Energy spectra for detector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                         __energy__[2], __energy_bin__.data());
             __Energy_Ded_1D_PileUp__[i]->SetDirectory(__OutFile__);
 
-            __Energy_Par_1D_PileUp__[i] = new TH1D(Form("Pile up Energy spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                        Form("Pile up Energy spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __Energy_Par_1D_PileUp__[i] = new TH1D(Form("Pile up Energy spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                        Form("Pile up Energy spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                         __energy__[2], __energy_bin__.data());
             __Energy_Par_1D_PileUp__[i]->SetDirectory(__OutFile__);
         }
@@ -1052,27 +1271,27 @@ void DetectorClass::Histogram_Def_1D(std::string __sample__, std::string __SILI_
 
     for(int i = 0; i < __Number_Strips__; i++){
 
-        __amp_histo__[i] = new TH1F(Form("Amp spectra for detetector %i & sample %s. %s detector", i+1, __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("Amp spectra for detetector %i & sample %s. %s detector", i+1, __sample__.c_str(), __SILI__.c_str()), 
+        __amp_histo__[i] = new TH1F(Form("Amp spectra for detector %i & sample %s. %s detector", i+1, __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("Amp spectra for detector %i & sample %s. %s detector", i+1, __sample__.c_str(), __SILI__.c_str()), 
                                     __amp_ch__[2], __amp_ch_bin__.data());
         __amp_histo__[i]->SetDirectory(__OutFile__);
 
         if(__Calibration__){
-            __cal_histo__[i] = new TH1F(Form("Amp calibrated energy spectra for detetector %i & sample %s. %s detector", i+1, __sample__.c_str(), __SILI__.c_str()), 
-                                        Form("Amp calibrated energy spectra for detetector %i & sample %s. %s detector", i+1, __sample__.c_str(), __SILI__.c_str()), 
+            __cal_histo__[i] = new TH1F(Form("Amp calibrated energy spectra for detector %i & sample %s. %s detector", i+1, __sample__.c_str(), __SILI__.c_str()), 
+                                        Form("Amp calibrated energy spectra for detector %i & sample %s. %s detector", i+1, __sample__.c_str(), __SILI__.c_str()), 
                                         __amp_cal__[2], __amp_cal_bin__.data());
             __cal_histo__[i]->SetDirectory(__OutFile__);
         }
 
         for(int j = 0; j < __pulse_type__.size(); j++){
 
-            __tof_histo__[j][i] = new TH1F(Form("TOF spectra for detetector %i & sample %s. %s & %s", i+1, __sample__.c_str(), __SILI__.c_str(), __pulse_type__[j].c_str()), 
-                                        Form("TOF vs Amp spectra for detetector %i & sample %s. %s & %s", i+1, __sample__.c_str(), __SILI__.c_str(), __pulse_type__[j].c_str()), 
+            __tof_histo__[j][i] = new TH1F(Form("TOF spectra for detector %i & sample %s. %s & %s", i+1, __sample__.c_str(), __SILI__.c_str(), __pulse_type__[j].c_str()), 
+                                        Form("TOF vs Amp spectra for detector %i & sample %s. %s & %s", i+1, __sample__.c_str(), __SILI__.c_str(), __pulse_type__[j].c_str()), 
                                         __tof__[2], __tof_bin__.data());
             __tof_histo__[j][i]->SetDirectory(__OutFile__);
 
-            __energy_histo__[j][i] = new TH1F(Form("Energy spectra for detetector %i & sample %s. %s & %s", i+1, __sample__.c_str(), __SILI__.c_str(), __pulse_type__[j].c_str()), 
-                                            Form("Energy spectra for detetector %i & sample %s. %s & %s", i+1, __sample__.c_str(), __SILI__.c_str(), __pulse_type__[j].c_str()), 
+            __energy_histo__[j][i] = new TH1F(Form("Energy spectra for detector %i & sample %s. %s & %s", i+1, __sample__.c_str(), __SILI__.c_str(), __pulse_type__[j].c_str()), 
+                                            Form("Energy spectra for detector %i & sample %s. %s & %s", i+1, __sample__.c_str(), __SILI__.c_str(), __pulse_type__[j].c_str()), 
                                             __energy__[2], __energy_bin__.data());
             __energy_histo__[j][i]->SetDirectory(__OutFile__);
         }
@@ -1094,17 +1313,19 @@ void DetectorClass::Histogram_Def_1D(std::string __sample__, std::string __SILI_
 
 }
 
-void DetectorClass::Histogram_Def_1D_Calibration(std::vector<std::string> __sample__, std::string __SILI__){
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DetectorClass::Histogram_Def_Calibration(std::vector<std::string> __sample__, std::string __SILI__){
 
     for(int i = 0; i < __sample__.size(); i++){
             for(int j = 0; j < __Number_Strips__; j++){
 
-            __amp_histo_CAL__[i][j] = new TH1F(Form("Amp spectra for detetector %i & sample %s. %s detector", j+1, __sample__[i].c_str(), __SILI__.c_str()), 
-                                        Form("Amp spectra for detetector %i & sample %s. %s detector", j+1, __sample__[i].c_str(), __SILI__.c_str()), 
+            __amp_histo_CAL__[i][j] = new TH1F(Form("Amp spectra for detector %i & sample %s. %s detector", j+1, __sample__[i].c_str(), __SILI__.c_str()), 
+                                        Form("Amp spectra for detector %i & sample %s. %s detector", j+1, __sample__[i].c_str(), __SILI__.c_str()), 
                                         __amp_ch__[2], __amp_ch_bin__.data());
 
-            __cal_histo_CAL__[i][j] = new TH1F(Form("Amp calibrated energy spectra for detetector %i & sample %s. %s detector", j+1, __sample__[i].c_str(), __SILI__.c_str()), 
-                                        Form("Amp calibrated energy spectra for detetector %i & sample %s. %s detector", j+1, __sample__[i].c_str(), __SILI__.c_str()), 
+            __cal_histo_CAL__[i][j] = new TH1F(Form("Amp calibrated energy spectra for detector %i & sample %s. %s detector", j+1, __sample__[i].c_str(), __SILI__.c_str()), 
+                                        Form("Amp calibrated energy spectra for detector %i & sample %s. %s detector", j+1, __sample__[i].c_str(), __SILI__.c_str()), 
                                         __amp_cal__[2], __amp_cal_bin__.data());
         }
 
@@ -1112,26 +1333,14 @@ void DetectorClass::Histogram_Def_1D_Calibration(std::vector<std::string> __samp
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DetectorClass::Histogram_Def_Stability(std::string __sample__, std::string __SILI__){
     
     for(int i = 0; i < __Number_Strips__; i++){
         __Strip_Run_Ded__[i] = new TH1D(Form("Stability of strip %i per Run. Sample %s, detector %s & Dedicated", i+1, __sample__.c_str(), __SILI__.c_str()), 
                                     Form("Stability of strip %i per Run. Sample %s, detector %s & Dedicated", i+1, __sample__.c_str(), __SILI__.c_str()), 
                                     __bunch__[2], __bunch_bin__.data());
-
-        std::cout << "Created: "
-          << i << "  "
-          << __Strip_Run_Ded__[i]
-          << std::endl;
-
-std::cout << "Name: "
-          << __Strip_Run_Ded__[i]->GetName()
-          << std::endl;
-
-std::cout << "Bins: "
-          << __Strip_Run_Ded__[i]->GetNbinsX()
-          << std::endl;
-
         __Strip_Run_Ded__[i]->SetDirectory(__OutFile__);
 
         __Strip_PKUP_Ded__[i] = new TH1D(Form("Stability of strip %i compared with PKUP area. Sample %s, detector %s & Dedicated", i+1, __sample__.c_str(), __SILI__.c_str()), 
@@ -1150,51 +1359,45 @@ std::cout << "Bins: "
         __Strip_PKUP_Par__[i]->SetDirectory(__OutFile__);
     }
 
-    __BCT_PKUP_Ded__ = new TH1D(Form("Stability for the proton beam. Sample %s, detector %s & Dedicated", __sample__.c_str(), __SILI__.c_str()), 
+    __BCT_PKUP_Ded__ = new TH1D(Form("Stability for the proton beam. BCT/PKUP area ratio. Sample %s, detector %s & Dedicated", __sample__.c_str(), __SILI__.c_str()), 
                                      Form("Stability for the proton beam. Sample %s, detector %s & Dedicated", __sample__.c_str(), __SILI__.c_str()), 
                                     __bunch__[2], __bunch_bin__.data());
     __BCT_PKUP_Ded__->SetDirectory(__OutFile__);
 
-    __BCT_PKUP_Par__ = new TH1D(Form("Stability for the proton beam. Sample %s, detector %s & Parasitic", __sample__.c_str(), __SILI__.c_str()), 
+    __BCT_PKUP_Par__ = new TH1D(Form("Stability for the proton beam. BCT/PKUP area ratio. Sample %s, detector %s & Parasitic", __sample__.c_str(), __SILI__.c_str()), 
                                      Form("Stability for the proton beam. Sample %s, detector %s & Parasitic", __sample__.c_str(), __SILI__.c_str()), 
                                     __bunch__[2], __bunch_bin__.data());
     __BCT_PKUP_Par__->SetDirectory(__OutFile__);
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DetectorClass::Histogram_Def_DeadTime(std::string __SILI__){
 
     for(int i = 0; i < __Number_Strips__; i++){
 
-        __Thr_SILI__[i] = new TH2F(Form("Time Diff & Energy dep between two signals for %s detector %i", __SILI__.c_str(), i+1), 
-                                   Form("Time Diff & Energy dep between two signals for %s detector %i", __SILI__.c_str(), i+1), 
-                                   __Thr_Time__[2], __Thr_Time_bin__.data(),
-                                   __Thr_Energy_Reb__[2], __Thr_Energy_Reb_bin__.data());
-
-        __Thr_SILI__[i]->SetDirectory(__OutFile__);
-
-        __Thr_SILI_En__[i] = new TH2F(Form("Energy dep from both signals between two signals for %s detector %i", __SILI__.c_str(), i+1), 
-                                   Form("Energy dep from both signals between two signals for %s detector %i", __SILI__.c_str(), i+1), 
+        __Thr_SILI_En__[i] = new TH2F(Form("Energy dep from both consecutive signals for %s detector & strip %i", __SILI__.c_str(), i+1), 
+                                   Form("Energy dep from both consecutive signals for %s detector & strip %i", __SILI__.c_str(), i+1), 
                                    __Thr_Energy_Reb__[2], __Thr_Energy_Reb_bin__.data(),
                                    __Thr_Energy_Main__[2], __Thr_Energy_Main_bin__.data());
 
         __Thr_SILI_En__[i]->SetDirectory(__OutFile__);
 
-        __Thr_Energy_Dep__[i] = new TH1F(Form("Energy dep between two signals for %s detector %i", __SILI__.c_str(), i+1), 
-                                             Form("Energy dep between two signals for %s detector %i", __SILI__.c_str(), i+1), 
+        __Thr_Energy_Dep__[i] = new TH1F(Form("Deposited energy from the second signal for %s detector & strip %i", __SILI__.c_str(), i+1), 
+                                             Form("Deposited energy from the second signal for %s detector & strip %i", __SILI__.c_str(), i+1), 
                                              __Thr_Energy_Reb__[2], __Thr_Energy_Reb_bin__.data());
 
         __Thr_Energy_Dep__[i]->SetDirectory(__OutFile__);
 
-
-        __Thr_Time_Diff__[i] = new TH1F(Form("Time Diff between two signals for %s detector %i", __SILI__.c_str(), i+1), 
-                                            Form("Time Diff between two signals for %s detector %i", __SILI__.c_str(), i+1), 
+        __Thr_Time_Diff__[i] = new TH1F(Form("Time different with energy threshold between two signals for %s detector & strip %i", __SILI__.c_str(), i+1), 
+                                            Form("Time different with energy threshold between two signals for %s detector & strip %i", __SILI__.c_str(), i+1), 
                                             __Thr_Time__[2], __Thr_Time_bin__.data());
 
         __Thr_Time_Diff__[i]->SetDirectory(__OutFile__);
 
-        __Dead_Time__[i] = new TH1F(Form("Dead Time corection for %s detector %i", __SILI__.c_str(), i+1), 
-                                            Form("Dead Time corection for %s detector %i", __SILI__.c_str(), i+1), 
+        __Dead_Time__[i] = new TH1F(Form("Dead Time correction for %s detector & strip %i", __SILI__.c_str(), i+1), 
+                                            Form("Dead Time correction for %s detector & strip %i", __SILI__.c_str(), i+1), 
                                             __Thr_Time__[2], __Thr_Time_bin__.data());
 
         __Dead_Time__[i]->SetDirectory(__OutFile__);
@@ -1203,41 +1406,80 @@ void DetectorClass::Histogram_Def_DeadTime(std::string __SILI__){
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DetectorClass::Histogram_Def_Coincidence_Front_Back(std::string __sample__, std::string __SILI__){
 
     __Coincidence_Ded__ = new TH2F(Form("Coincidence map between detectors & sample %s. %s & Dedicated", __sample__.c_str(), __SILI__.c_str()), 
                                     Form("Coincidence map between detectors & sample %s. %s & Dedicated", __sample__.c_str(), __SILI__.c_str()), 
-                                    __Number_Strips__, 0, __Number_Strips__, __Number_Strips__, 0, __Number_Strips__);
+                                    16, 0, 16, 16, 0, 16);
     __Coincidence_Ded__->SetDirectory(__OutFile__);
 
     __Coincidence_Par__ = new TH2F(Form("Coincidence map between detectors & sample %s. %s & Parasitic", __sample__.c_str(), __SILI__.c_str()), 
                                     Form("Coincidence map between detectors & sample %s. %s & Parasitic", __sample__.c_str(), __SILI__.c_str()), 
-                                    __Number_Strips__, 0, __Number_Strips__, __Number_Strips__, 0, __Number_Strips__);
+                                    16, 0, 16, 16, 0, 16);
     __Coincidence_Par__->SetDirectory(__OutFile__);
 
-    __Diff_Time_Front_Back__ = new TH1D("Time different between Front-Back detector", "Time different between Front-Back detector", 1000, -1000, 1000);
+    __Coincidence_ReMap_Ded__ = new TH2F(Form("Coincidence remap between detectors & sample %s. %s & Dedicated", __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("Coincidence remap between detectors & sample %s. %s & Dedicated", __sample__.c_str(), __SILI__.c_str()), 
+                                    16, 0, 16, 16, 0, 16);
+    __Coincidence_ReMap_Ded__->SetDirectory(__OutFile__);
+
+    __Coincidence_ReMap_Par__ = new TH2F(Form("Coincidence remap between detectors & sample %s. %s & Parasitic", __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("Coincidence remap between detectors & sample %s. %s & Parasitic", __sample__.c_str(), __SILI__.c_str()), 
+                                    16, 0, 16, 16, 0, 16);
+    __Coincidence_ReMap_Par__->SetDirectory(__OutFile__);
+
+    for (int i = 0; i < __Side__.size(); i++){
+        if(i == 2){
+            __SILI__ = "DEED";
+        }else{
+            __SILI__ = "EDET";
+        }
+        __Map_Ded_1D__[i] = new TH1D(Form("Strip map for detector %s & %s. Dedicated", __SILI__.c_str(), __Side__[i].c_str()), 
+                                Form("Strip map for detector %s & %s. Dedicated", __SILI__.c_str(), __Side__[i].c_str()), 
+                                16, 0, 16);
+        __Map_Ded_1D__[i]->SetDirectory(__OutFile__);
+
+        __Map_Par_1D__[i] = new TH1D(Form("Strip map for detector %s & %s. Parasitic", __SILI__.c_str(), __Side__[i].c_str()), 
+                                Form("Strip map for detector %s & %s. Parasitic", __SILI__.c_str(), __Side__[i].c_str()), 
+                                16, 0, 16);
+        __Map_Par_1D__[i]->SetDirectory(__OutFile__);
+    }
+
+    __Diff_Time_Front_Back__ = new TH1D("Time different between Front-Back detector", "Time different between Front-Back detector", 2000, -2000, 2000);
     __Diff_Time_Front_Back__->SetDirectory(__OutFile__);
+    
+    __Diff_Amp_Front_Back__ = new TH1D("Amp different between Front-Back detector", "Amp different between Front-Back detector", 3000, -30, 30);
+    __Diff_Amp_Front_Back__->SetDirectory(__OutFile__);
+
+    __Diff_Amp_Time_Front_Back__ = new TH2D("Amp-Time different between Front-Back detector", "Amp-Time different between Front-Back detector", 3000, -30, 30, 2000, -2000, 2000);
+    __Diff_Amp_Time_Front_Back__->SetDirectory(__OutFile__);
 
     if(__Calibration__){
         for(int i = 0; i < __Side__.size(); i++){
-            __TOF_Ded_Coincidence__[i] = new TH2D(Form("TOF vs Amp coincidence spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("TOF vs Amp coincidence spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            if(i == 2){
+                __SILI__ = "DEED";
+            }else{
+                __SILI__ = "EDET";
+            }
+            __TOF_Ded_Coincidence__[i] = new TH2D(Form("TOF vs Amp coincidence spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("TOF vs Amp coincidence spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __tof__[2], __tof_bin__.data(), __amp_cal__[2], __amp_cal_bin__.data());
             __TOF_Ded_Coincidence__[i]->SetDirectory(__OutFile__);
 
-            __TOF_Par_Coincidence__[i] = new TH2D(Form("TOF vs Amp coincidence spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("TOF vs Amp coincidence spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __TOF_Par_Coincidence__[i] = new TH2D(Form("TOF vs Amp coincidence spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("TOF vs Amp coincidence spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __tof__[2], __tof_bin__.data(), __amp_cal__[2], __amp_cal_bin__.data());
             __TOF_Par_Coincidence__[i]->SetDirectory(__OutFile__);
 
-
-            __Energy_Ded_Coincidence__[i] = new TH2D(Form("Energy vs Amp coincidence spectra for detetector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                        Form("Energy vs Amp coincidence spectra for detetector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __Energy_Ded_Coincidence__[i] = new TH2D(Form("Energy vs Amp coincidence spectra for detector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                        Form("Energy vs Amp coincidence spectra for detector %s & sample %s. %s & Dedicated",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                         __energy__[2], __energy_bin__.data(), __amp_cal__[2], __amp_cal_bin__.data());
             __Energy_Ded_Coincidence__[i]->SetDirectory(__OutFile__);
 
-            __Energy_Par_Coincidence__[i] = new TH2D(Form("Energy vs Amp coincidence spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                        Form("Energy vs Amp coincidence spectra for detetector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __Energy_Par_Coincidence__[i] = new TH2D(Form("Energy vs Amp coincidence spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                        Form("Energy vs Amp coincidence spectra for detector %s & sample %s. %s & Parasitic",  __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                         __energy__[2], __energy_bin__.data(), __amp_cal__[2], __amp_cal_bin__.data());
             __Energy_Par_Coincidence__[i]->SetDirectory(__OutFile__);
         }
@@ -1252,26 +1494,37 @@ void DetectorClass::Histogram_Def_Coincidence_Front_Back(std::string __sample__,
         __Energy_Front_Back_Par__->SetDirectory(__OutFile__);
     }else{
         for(int i = 0; i < __Side__.size(); i++){
-            __TOF_Ded_Coincidence__[i] = new TH2D(Form("TOF vs Amp coincidence spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("TOF vs Amp coincidence spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            if(i == 2) break;
+            __TOF_Ded_Coincidence__[i] = new TH2D(Form("TOF vs Amp coincidence spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("TOF vs Amp coincidence spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __tof__[2], __tof_bin__.data(), __amp_ch__[2], __amp_ch_bin__.data());
             __TOF_Ded_Coincidence__[i]->SetDirectory(__OutFile__);
 
-            __TOF_Par_Coincidence__[i] = new TH2D(Form("TOF vs Amp coincidence spectra for detetector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                    Form("TOF vs Amp coincidence spectra for detetector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __TOF_Par_Coincidence__[i] = new TH2D(Form("TOF vs Amp coincidence spectra for detector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                    Form("TOF vs Amp coincidence spectra for detector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                     __tof__[2], __tof_bin__.data(), __amp_ch__[2], __amp_ch_bin__.data());
             __TOF_Par_Coincidence__[i]->SetDirectory(__OutFile__);
 
 
-            __Energy_Ded_Coincidence__[i] = new TH2D(Form("Energy vs Amp coincidence spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                        Form("Energy vs Amp coincidence spectra for detetector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __Energy_Ded_Coincidence__[i] = new TH2D(Form("Energy vs Amp coincidence spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                        Form("Energy vs Amp coincidence spectra for detector %s & sample %s. %s & Dedicated", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                         __energy__[2], __energy_bin__.data(), __amp_ch__[2], __amp_ch_bin__.data());
             __Energy_Ded_Coincidence__[i]->SetDirectory(__OutFile__);
 
-            __Energy_Par_Coincidence__[i] = new TH2D(Form("Energy vs Amp coincidence spectra for detetector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
-                                        Form("Energy vs Amp coincidence spectra for detetector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+            __Energy_Par_Coincidence__[i] = new TH2D(Form("Energy vs Amp coincidence spectra for detector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
+                                        Form("Energy vs Amp coincidence spectra for detector %s & sample %s. %s & Parasitic", __Side__[i].c_str(), __sample__.c_str(), __SILI__.c_str()), 
                                         __energy__[2], __energy_bin__.data(), __amp_ch__[2], __amp_ch_bin__.data());
             __Energy_Par_Coincidence__[i]->SetDirectory(__OutFile__);
+
+            __Cal_Histo_All_Strips_Ded__[i] = new TH1F(Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Dedicated", __sample__.c_str(), __Side__[i].c_str()), 
+                                            Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Dedicated", __sample__.c_str(), __Side__[i].c_str()), 
+                                            __amp_ch__[2], __amp_ch_bin__.data());
+            __Cal_Histo_All_Strips_Ded__[i]->SetDirectory(__OutFile__);
+
+            __Cal_Histo_All_Strips_Par__[i] = new TH1F(Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Parasitic", __sample__.c_str(), __Side__[i].c_str()), 
+                                            Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Parasitic", __sample__.c_str(), __Side__[i].c_str()), 
+                                            __amp_ch__[2], __amp_ch_bin__.data());
+            __Cal_Histo_All_Strips_Par__[i]->SetDirectory(__OutFile__);
         }
         __Energy_Front_Back_Ded__ = new TH2F(Form("Energy for front and back detectors. Sample %s & Dedicated", __sample__.c_str()), 
                                              Form("Energy for front and back detectors. Sample %s & Dedicated", __sample__.c_str()), 
@@ -1285,6 +1538,7 @@ void DetectorClass::Histogram_Def_Coincidence_Front_Back(std::string __sample__,
     }
 
     for(int i = 0; i < __Side__.size(); i++){
+        if(i == 2) break;
         __TOF_coincidence_Ded_1D__[i] = new TH1D(Form("TOF spectra for coincidence front-back. Sample %s, %s & Dedicated", __sample__.c_str(), __Side__[i].c_str()), 
                                                  Form("TOF spectra for coincidence front-back. Sample %s, %s & Dedicated", __sample__.c_str(), __Side__[i].c_str()), 
                                 __tof__[2], __tof_bin__.data());
@@ -1305,6 +1559,16 @@ void DetectorClass::Histogram_Def_Coincidence_Front_Back(std::string __sample__,
                                     Form("Energy spectra for coincidence front-back. Sample %s, %s & Parasitic", __sample__.c_str(), __Side__[i].c_str()), 
                                     __energy__[2], __energy_bin__.data());
         __Energy_coincidence_Par_1D__[i]->SetDirectory(__OutFile__);
+
+        __Cal_Histo_All_Strips_Ded__[i] = new TH1F(Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Dedicated", __sample__.c_str(), __Side__[i].c_str()), 
+                                    Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Dedicated", __sample__.c_str(), __Side__[i].c_str()), 
+                                    __amp_cal__[2], __amp_cal_bin__.data());
+        __Cal_Histo_All_Strips_Ded__[i]->SetDirectory(__OutFile__);
+
+        __Cal_Histo_All_Strips_Par__[i] = new TH1F(Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Parasitic", __sample__.c_str(), __Side__[i].c_str()), 
+                                    Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Parasitic", __sample__.c_str(), __Side__[i].c_str()), 
+                                    __amp_cal__[2], __amp_cal_bin__.data());
+        __Cal_Histo_All_Strips_Par__[i]->SetDirectory(__OutFile__);
     }
 
     for(int j = 0; j < __Number_Strips__; j++){
@@ -1326,6 +1590,8 @@ void DetectorClass::Histogram_Def_Coincidence_Front_Back(std::string __sample__,
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DetectorClass::Histogram_Def_Coincidence_Forward_Backward(std::string __sample__, std::string __SILI__){
 
     __Coincidence_Ded_Forward_Backward__ = new TH2F(Form("Coincidence map between forward & backward detectors. Sample %s & Dedicated", __sample__.c_str()), 
@@ -1338,12 +1604,17 @@ void DetectorClass::Histogram_Def_Coincidence_Forward_Backward(std::string __sam
                                     __Number_Strips__, 0, __Number_Strips__, __Number_Strips__, 0, __Number_Strips__);
     __Coincidence_Par_Forward_Backward__->SetDirectory(__OutFile__);
 
-    __Diff_Time_Forward_Backward__ = new TH1D("Time different between Forward-Backward detector", "Time different between Forward-Backward detector", 1000, -1000, 1000);
+    __Diff_Time_Forward_Backward__ = new TH1D("Time different between Forward-Backward detector", "Time different between Forward-Backward detector", 2000, -2000, 2000);
     __Diff_Time_Forward_Backward__->SetDirectory(__OutFile__);
+    
+    __Diff_Amp_Forward_Backward__ = new TH1D("Amp different between Forward-Backward detector", "Amp different between Forward-Backward detector", 3000, -30, 30);
+    __Diff_Amp_Forward_Backward__->SetDirectory(__OutFile__);
+
+    __Diff_Amp_Time_Forward_Backward__ = new TH2D("Amp-Time different between Forward-Backward detector", "Amp-Time different between Forward-Backward detector", 3000, -30, 30, 2000, -2000, 2000);
+    __Diff_Amp_Time_Forward_Backward__->SetDirectory(__OutFile__);
 
     if(__Calibration__){
-        int i = __Side__.size() - 1;
-     
+
         __Energy_Forward_Backward_Ded__ = new TH2F(Form("Energy for forward and backward detectors. Sample %s & Dedicated", __sample__.c_str()), 
                                              Form("Energy for forward and backward detectors. Sample %s & Dedicated", __sample__.c_str()), 
                                              __amp_cal__[2], __amp_cal_bin__.data(), __amp_cal__[2], __amp_cal_bin__.data());
@@ -1355,8 +1626,6 @@ void DetectorClass::Histogram_Def_Coincidence_Forward_Backward(std::string __sam
         __Energy_Forward_Backward_Par__->SetDirectory(__OutFile__);
 
     }else{
-
-        int i = __Side__.size() - 1;
         
         __Energy_Forward_Backward_Ded__ = new TH2F(Form("Energy for forward and backward detectors. Sample %s & Dedicated", __sample__.c_str()), 
                                              Form("Energy for forward and backward detectors. Sample %s & Dedicated", __sample__.c_str()), 
@@ -1371,27 +1640,51 @@ void DetectorClass::Histogram_Def_Coincidence_Forward_Backward(std::string __sam
     }
 
 
-    int i = __Side__.size() - 1;
-    __TOF_coincidence_Ded_1D__[i] = new TH1D(Form("TOF spectra for coincidence forward-backward. Sample %s, %s & Dedicated", __sample__.c_str(), __Side__[i].c_str()), 
-                                             Form("TOF spectra for coincidence forward-backward. Sample %s, %s & Dedicated", __sample__.c_str(), __Side__[i].c_str()), 
-                                             __tof__[2], __tof_bin__.data());
-    __TOF_coincidence_Ded_1D__[i]->SetDirectory(__OutFile__);
+    std::vector<std::string> __Special_Side__;
+    __Special_Side__.push_back("Forward");
+    __Special_Side__.push_back("Backward");
 
-    __TOF_coincidence_Par_1D__[i] = new TH1D(Form("TOF spectra for coincidence forward-backward. Sample %s, %s & Parasitic", __sample__.c_str(), __Side__[i].c_str()), 
-                                             Form("TOF spectra for coincidence forward-backward. Sample %s, %s & Parasitic", __sample__.c_str(), __Side__[i].c_str()), 
-                                             __tof__[2], __tof_bin__.data());
-    __TOF_coincidence_Par_1D__[i]->SetDirectory(__OutFile__);
+    for(int i = 0; i < __Special_Side__.size(); i ++){
+        __TOF_coincidence_Ded_1D__[i + 2] = new TH1D(Form("TOF spectra for coincidence forward-backward. Sample %s, %s & Dedicated", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                                Form("TOF spectra for coincidence forward-backward. Sample %s, %s & Dedicated", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                                __tof__[2], __tof_bin__.data());
+        __TOF_coincidence_Ded_1D__[i + 2]->SetDirectory(__OutFile__);
 
+        __TOF_coincidence_Par_1D__[i + 2] = new TH1D(Form("TOF spectra for coincidence forward-backward. Sample %s, %s & Parasitic", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                                Form("TOF spectra for coincidence forward-backward. Sample %s, %s & Parasitic", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                                __tof__[2], __tof_bin__.data());
+        __TOF_coincidence_Par_1D__[i + 2]->SetDirectory(__OutFile__);
 
-    __Energy_coincidence_Ded_1D__[i] = new TH1D(Form("Energy spectra for coincidence forward-backward. Sample %s, %s & Dedicated", __sample__.c_str(), __Side__[i].c_str()), 
-                                                Form("Energy spectra for coincidence forward-backward. Sample %s, %s & Dedicated", __sample__.c_str(), __Side__[i].c_str()), 
-                                                __energy__[2], __energy_bin__.data());
-    __Energy_coincidence_Ded_1D__[i]->SetDirectory(__OutFile__);
+        __Energy_coincidence_Ded_1D__[i + 2] = new TH1D(Form("Energy spectra for coincidence forward-backward. Sample %s, %s & Dedicated", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                                    Form("Energy spectra for coincidence forward-backward. Sample %s, %s & Dedicated", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                                    __energy__[2], __energy_bin__.data());
+        __Energy_coincidence_Ded_1D__[i + 2]->SetDirectory(__OutFile__);
 
-    __Energy_coincidence_Par_1D__[i] = new TH1D(Form("Energy spectra for coincidence forward-backward. Sample %s, %s & Parasitic", __sample__.c_str(), __Side__[i].c_str()), 
-                                                Form("Energy spectra for coincidence forward-backward. Sample %s, %s & Parasitic", __sample__.c_str(), __Side__[i].c_str()), 
-                                                __energy__[2], __energy_bin__.data());
-    __Energy_coincidence_Par_1D__[i]->SetDirectory(__OutFile__);
+        __Energy_coincidence_Par_1D__[i + 2] = new TH1D(Form("Energy spectra for coincidence forward-backward. Sample %s, %s & Parasitic", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                                    Form("Energy spectra for coincidence forward-backward. Sample %s, %s & Parasitic", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                                    __energy__[2], __energy_bin__.data());
+        __Energy_coincidence_Par_1D__[i + 2]->SetDirectory(__OutFile__);
+
+        __Cal_Histo_All_Strips_Ded__[i + 2] = new TH1F(Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Dedicated", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                            Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Dedicated", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                            __amp_cal__[2], __amp_cal_bin__.data());
+        __Cal_Histo_All_Strips_Ded__[i + 2]->SetDirectory(__OutFile__);
+
+        __Cal_Histo_All_Strips_Par__[i + 2] = new TH1F(Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Parasitic", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                            Form("Coincidence Amp calibrated energy spectra for sample %s. All strips %s & Parasitic", __sample__.c_str(), __Special_Side__[i].c_str()), 
+                                            __amp_cal__[2], __amp_cal_bin__.data());
+        __Cal_Histo_All_Strips_Par__[i + 2]->SetDirectory(__OutFile__);
+    }
+
+    __Cal_Histo_Add_Peaks_Ded__ = new TH1F(Form("Coincidence Amp calibrated energy Forward-Backward added for sample %s. All strips & Dedicated", __sample__.c_str()), 
+                                            Form("Coincidence Amp calibrated energy Forward-Backward added for sample %s. All strips & Dedicated", __sample__.c_str()), 
+                                            __amp_cal__[2], __amp_cal_bin__.data());
+    __Cal_Histo_Add_Peaks_Ded__->SetDirectory(__OutFile__);
+
+    __Cal_Histo_Add_Peaks_Par__ = new TH1F(Form("Coincidence Amp calibrated energy Forward-Backward added for sample %s. All strips & Parasitic", __sample__.c_str()), 
+                                            Form("Coincidence Amp calibrated energy Forward-Backward added for sample %s. All strips & Parasitic", __sample__.c_str()), 
+                                            __amp_cal__[2], __amp_cal_bin__.data());
+    __Cal_Histo_Add_Peaks_Par__->SetDirectory(__OutFile__);
     
 
     for(int j = 0; j < 16; j++){
@@ -1413,10 +1706,14 @@ void DetectorClass::Histogram_Def_Coincidence_Forward_Backward(std::string __sam
 
 }
 
-void DetectorClass::NewCutLineDraw(){
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DetectorClass::NewCutLineDraw(std::string name){
 
     if(__PileUp_Correction__){
         __Energy_Cut_Line__ = new TH1D*[3];
+    }else if(!name.empty()){
+        __Energy_Cut_Line__ = new TH1D*[4];
     }else{
         __Energy_Cut_Line__ = new TH1D*[2];
     }
@@ -1429,11 +1726,23 @@ void DetectorClass::NewCutLineDraw(){
                                          __energy__[2], __energy_bin__.data());
     __Energy_Cut_Line__[1]->SetDirectory(__OutFile__);
 
+    if(!name.empty()){
+        __Energy_Cut_Line__[2] = new TH1D("New Cut applied in Amplitude SSD. Low Cut", "New Cut applied in Amplitude SSD. Low Cut", 
+                                         __energy__[2], __energy_bin__.data());
+        __Energy_Cut_Line__[2]->SetDirectory(__OutFile__);
+
+        __Energy_Cut_Line__[3] = new TH1D("New Cut applied in Amplitude SSD. High Cut", "New Cut applied in Amplitude SSD. High Cut", 
+                                            __energy__[2], __energy_bin__.data());
+        __Energy_Cut_Line__[3]->SetDirectory(__OutFile__);
+    }
+
     if(__PileUp_Correction__){
         __Energy_Cut_Line__[2] = new TH1D("New Cut applied in Amplitude for PileUp. Up Cut", "New Cut applied in Amplitude for PileUp. Up Cut", 
                                          __energy__[2], __energy_bin__.data());
         __Energy_Cut_Line__[2]->SetDirectory(__OutFile__);
     }
+
+
 
     double lowcut, highcut, upcut;
     lowcut = __Amplitude_Cut__[0];
@@ -1449,6 +1758,20 @@ void DetectorClass::NewCutLineDraw(){
     if(__PileUp_Correction__){
         upcut = __Amplitude_Cut__[2];
         for (int i = 0; i < __energy__[2]; ++i) __Energy_Cut_Line__[2]->SetBinContent(i + 1, upcut + pow(__energy_bin__[i] / 1e6, userInp->Get_Pow_Factor()));
+    }
+
+    if(!name.empty()){
+         double lowcut_SSD, highcut_SSD;
+        lowcut_SSD = __Amplitude_Cut_SSD__[0];
+        highcut_SSD = __Amplitude_Cut_SSD__[1];
+
+        for (int i = 0; i < __energy__[2]; ++i) {
+
+            __Energy_Cut_Line__[3]->SetBinContent(i + 1, highcut_SSD + pow(__energy_bin__[i] / 1e6, userInp->Get_Pow_Factor()));
+            __Energy_Cut_Line__[2]->SetBinContent(i + 1, lowcut_SSD + pow(__energy_bin__[i] / 1e6, userInp->Get_Pow_Factor()));
+        
+        }
+    
     }
 
 }

@@ -1,6 +1,10 @@
 #include "FlightPathCalibration.h" 
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 FlightPathCalibration* FlightPathCalibration::current_instance = nullptr;
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 FlightPathCalibration::FlightPathCalibration(DetectorClass* det, UserInput *u){
 
@@ -9,11 +13,15 @@ FlightPathCalibration::FlightPathCalibration(DetectorClass* det, UserInput *u){
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 FlightPathCalibration::~FlightPathCalibration(){
 
     delete __flight_path_file__;
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void FlightPathCalibration::Inizialization(){
 
@@ -21,26 +29,62 @@ void FlightPathCalibration::Inizialization(){
     numberoffits = userInp->Get_Number_Fits();
     __Readhistofromfile__ = userInp->Get_Histo_From_File();
     __Sample__ = userInp->Get_Sample();
-    __Detector__ = userInp->Get_One_Detector();
+    __Detector__ = userInp->Get_Detectors();
+    __PS_mode__ = userInp->Get_PS_mode();
 
     if(__Readhistofromfile__){
 
         std::string file = userInp->Get_Histo_File();
         TFile *fflux = new TFile(file.c_str(), "read");
-        if(userInp->Get_Apply_Pile_Up()){
-            tof_fit = (TH1D*)fflux->Get(Form("Pile up corrected TOF spectra for detetector Front & sample %s. %s & Dedicated", __Sample__[0].c_str(), __Detector__.c_str()));
-            energy_fit = (TH1D*)fflux->Get(Form("Pile up corrected Energy spectra for detetector Front & sample %s. %s & Dedicated", __Sample__[0].c_str(), __Detector__.c_str()));
+        if(__PS_mode__ == "Dedicated"){
+            if(userInp->Get_Apply_Pile_Up()){ 
+                tof_fit = (TH1D*)fflux->Get(Form("Pile up corrected TOF spectra for detector Front & sample %s. %s & Dedicated", __Sample__[0].c_str(), __Detector__[0].c_str()));
+                energy_fit = (TH1D*)fflux->Get(Form("Pile up corrected Energy spectra for detector Front & sample %s. %s & Dedicated", __Sample__[0].c_str(), __Detector__[0].c_str()));
+            }else{
+                tof_fit = (TH1D*)fflux->Get(Form("TOF spectra for detector Front & sample %s. %s & Dedicated", __Sample__[0].c_str(), __Detector__[0].c_str()));
+                energy_fit = (TH1D*)fflux->Get(Form("Energy spectra for detector Front & sample %s. %s & Dedicated", __Sample__[0].c_str(), __Detector__[0].c_str()));
+            }
+        }else if(__PS_mode__ == "Parasitic"){
+            if(userInp->Get_Apply_Pile_Up()){
+                tof_fit = (TH1D*)fflux->Get(Form("Pile up corrected TOF spectra for detector Front & sample %s. %s & Parasitic", __Sample__[0].c_str(), __Detector__[0].c_str()));
+                energy_fit = (TH1D*)fflux->Get(Form("Pile up corrected Energy spectra for detector Front & sample %s. %s & Parasitc", __Sample__[0].c_str(), __Detector__[0].c_str()));
+            }else{
+                tof_fit = (TH1D*)fflux->Get(Form("TOF spectra for detector Front & sample %s. %s & Parasitic", __Sample__[0].c_str(), __Detector__[0].c_str()));
+                energy_fit = (TH1D*)fflux->Get(Form("Energy spectra for detector Front & sample %s. %s & Parasitic", __Sample__[0].c_str(), __Detector__[0].c_str()));
+            }
         }else{
-            tof_fit = (TH1D*)fflux->Get(Form("TOF spectra for detetector Front & sample %s. %s & Dedicated", __Sample__[0].c_str(), __Detector__.c_str()));
-            energy_fit = (TH1D*)fflux->Get(Form("Energy spectra for detetector Front & sample %s. %s & Dedicated", __Sample__[0].c_str(), __Detector__.c_str()));
+            std::cerr << "********************************" << std::endl
+                      << "********************************" << std::endl
+                      << "  Problems getting the PS mode  " << std::endl
+                      << "      Check your User Input     " << std::endl
+                      << "********************************" << std::endl
+                      << "********************************" << std::endl;
+            exit(-1);
         }
+        
         tof_fit->Scale(7e12 * 1000);
         energy_fit->Scale(7e12 * 1000);
 
     }else{
 
-        __TOF_histo__ = Detector->Get_TOF_Histogram();
-        __Energy_histo__ = Detector->Get_Energy_Histogram();
+        if(__PS_mode__ == "Dedicated"){
+            if(userInp->Get_Apply_Pile_Up()){
+                __TOF_histo__ = Detector->Get_TOF_Ded_PileUp_Histogram();
+                __Energy_histo__ = Detector->Get_Energy_Ded_PileUp_Histogram();
+            }else{
+                __TOF_histo__ = Detector->Get_TOF_Ded_Histogram();
+                __Energy_histo__ = Detector->Get_Energy_Ded_Histogram();
+            }
+        }else if(__PS_mode__ == "Parasitic"){
+            if(userInp->Get_Apply_Pile_Up()){
+                __TOF_histo__ = Detector->Get_TOF_Par_PileUp_Histogram();
+                __Energy_histo__ = Detector->Get_Energy_Par_PileUp_Histogram();
+            }else{
+                __TOF_histo__ = Detector->Get_TOF_Par_Histogram();
+                __Energy_histo__ = Detector->Get_Energy_Par_Histogram();
+            }
+        }
+        
         tof_fit = (TH1D*)__TOF_histo__[0]->Clone();
         energy_fit = (TH1D*)__Energy_histo__[0]->Clone();
 
@@ -54,6 +98,8 @@ void FlightPathCalibration::Inizialization(){
     userInp->Get_FlightPath_Simulation_Parameters(__Par_Sim_Thermal__, __Par_Sim_Dip1__, __Par_Sim_Dip2__, __Par_Sim_Dip3__, __Par_Sim_Res__);
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void FlightPathCalibration::Processing(){
 
@@ -72,6 +118,8 @@ void FlightPathCalibration::Processing(){
     __flight_path_file__->Close();
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void FlightPathCalibration::Counting_Rate(){
 
@@ -156,6 +204,8 @@ void FlightPathCalibration::Counting_Rate(){
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void FlightPathCalibration::Counting_Rate_TC(){
 
     //Read yield
@@ -222,6 +272,8 @@ void FlightPathCalibration::Counting_Rate_TC(){
     rfile.close();
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 TH1F* FlightPathCalibration::Rebinning( TH1F* histoin, TH1F* histoout){
     /*********************************************************************************
@@ -293,6 +345,8 @@ TH1F* FlightPathCalibration::Rebinning( TH1F* histoin, TH1F* histoout){
   return HRebin;
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 TH1D* FlightPathCalibration::Rebinning( TH1D* histoin, TH1D* histoout){
     /*********************************************************************************
      ***                          NEWTON INTERPOLATION                              ***
@@ -363,13 +417,19 @@ TH1D* FlightPathCalibration::Rebinning( TH1D* histoin, TH1D* histoout){
   return HRebin;
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 double FlightPathCalibration::first_derivative(double x, double a, double b, double c) {
     return 3*a*x*x + 2*b*x + c;
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 double FlightPathCalibration::second_derivative(double x, double a, double b) {
     return 6*a*x + 2*b;
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 double FlightPathCalibration::solve_quadratic(double a, double b, double c, double x1, double x2) {
     double discriminant = b*b - 4*a*c;
@@ -382,6 +442,8 @@ double FlightPathCalibration::solve_quadratic(double a, double b, double c, doub
     return x2;
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 double FlightPathCalibration::fitflight(double* v, double* par){
 
 const double m=939565560.81;            //Neutron Mass ev/c2
@@ -390,6 +452,8 @@ Double_t fitval=m/2/c0/c0*pow(par[0]/(v[0]-par[1]),2);
 return fitval;
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void FlightPathCalibration::flight_path_calibration(){
 
@@ -565,7 +629,7 @@ void FlightPathCalibration::flight_path_calibration(){
         errY[j] = eERR[j];
     }
 
-    TCanvas* cf = new TCanvas();
+    TCanvas* cf = new TCanvas("Flight Path Calibration", "Flight Path Calibration");
     const int npar=2;
     TGraph *gr1 = new TGraphErrors(numberoffits,tof,energy,errX,errY);
 
@@ -578,16 +642,16 @@ void FlightPathCalibration::flight_path_calibration(){
     std::cout << __tof_energy_par__[0] << "   " << __tof_energy_par__[1] << std::endl;
     gr1->SetMarkerSize(2.5);
     gr1->SetMarkerStyle(5);
-    gr1->Write();
+
+    cf->cd();
+    // Set logarithmic X axis on the PAD
+    gPad->SetLogx();
 
     gr1->Draw("AP");
+    fitg->Draw("SAME");
 
-    //Add Legend
-    TLegend *legend = new TLegend(0.8,0.7,0.9,0.9);
-    legend->SetHeader("","C");
-    legend->AddEntry(tof_fit, "6Li(n,t)" ,"l");
-
-    legend->Draw();
+    cf->Update();
+    cf->Write();
 
     //======================================================
     // Saving the experimental fit
@@ -595,14 +659,15 @@ void FlightPathCalibration::flight_path_calibration(){
 
     __flight_path_file__->cd();
 
-    tof_fit->SetName("Experimental_TOF_histogram");
+    tof_fit->SetName("Experimental TOF histogram");
     tof_fit->SetTitle("Experimental TOF with fits");
 
-    TCanvas *cTOF = new TCanvas("cTOF","Experimental TOF");
+    TCanvas *cTOF = new TCanvas("Experimental TOF Fits","Experimental TOF");
     cTOF->SetLogx();
     cTOF->SetLogy();
 
     tof_fit->Draw("hist");
+    tof_fit->Write();
 
     if (fit_tp)   fit_tp->Draw("same");
     if (fit_dip1) fit_dip1->Draw("same");
@@ -610,17 +675,17 @@ void FlightPathCalibration::flight_path_calibration(){
     if (fit_dip3) fit_dip3->Draw("same");
     if (fit_res)  fit_res->Draw("same");
 
-    tof_fit->Write();
+    cTOF->Update();
     cTOF->Write();
 
     //======================================================
     // Saving the simulation fit
     //======================================================
 
-    sim_fit->SetName("Simulation_histogram");
+    sim_fit->SetName("Simulated Energy histogram");
     sim_fit->SetTitle("Simulation with fits");
 
-    TCanvas *cSIM = new TCanvas("cSIM","Simulation");
+    TCanvas *cSIM = new TCanvas("Simulated Energy Fits","Simulation");
 
     cSIM->SetLogx();
     cSIM->SetLogy();
@@ -640,10 +705,10 @@ void FlightPathCalibration::flight_path_calibration(){
     // Saving the experimental energy
     //======================================================
 
-    energy_fit->SetName("Experimental_energy_histogram");
+    energy_fit->SetName("Experimental Energy histogram");
     energy_fit->SetTitle("Experimental energy");
 
-    TCanvas *cenergy = new TCanvas("cenergy","Experimental energy");
+    TCanvas *cenergy = new TCanvas("cEnergy","Experimental energy");
 
     cenergy->SetLogx();
     cenergy->SetLogy();
@@ -662,18 +727,17 @@ void FlightPathCalibration::flight_path_calibration(){
     energy_fit->Draw("hist");
 
     energy_fit->Write();
-    cenergy->Write();
 
     //======================================================
     // Saving the Ratio between exp and sim
     //======================================================
 
-    TH1D* Ratio = (TH1D*)energy_fit->Clone("Ratio_Exp_Sim");
+    TH1D* Ratio = (TH1D*)energy_fit->Clone("Ratio Exp/Sim");
     TH1D* Ratioaux = (TH1D*)sim_fit->Clone("");
     Ratioaux->SetDirectory(0);
     Ratio->SetDirectory(0);
 
-    TCanvas *cRatio = new TCanvas("Ratio_Exp_Sim","Ratio");
+    TCanvas *cRatio = new TCanvas("Ratio Exp/Sim","Ratio");
 
     cRatio->SetLogx();
     cRatio->SetLogy();
@@ -691,29 +755,15 @@ void FlightPathCalibration::flight_path_calibration(){
         Ratio->Divide(Ratioaux);
     }
 
-    Ratio->SetName("Ratio_Exp_Sim_Data");
+    Ratio->SetName("Ratio Exp/Sim Data");
     Ratio->SetTitle("Ratio Exp. Data / Sim. Data");
     Ratio->Write();
 
     Ratio->Draw("hist");
 
-    cRatio->Write();
-
-    //======================================================
-    // Save flight path fit
-    //======================================================
-
-    TCanvas *cFlight = new TCanvas("cFlight", "Flight path calibration");
-
-    gr1->Draw("AP");
-    fitg->Draw("same");
-
-    gr1->Write("Flight_path_graph");
-    fitg->Write("Flight_path_function");
-
-    cFlight->Write();
-
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void FlightPathCalibration::flight_path_calibration_TC(){
 
@@ -924,10 +974,10 @@ void FlightPathCalibration::flight_path_calibration_TC(){
 
     __flight_path_file__->cd();
 
-    tof_fit->SetName("Experimental_TOF_histogram");
+    tof_fit->SetName("Experimental TOF histogram");
     tof_fit->SetTitle("Experimental TOF with fits");
 
-    TCanvas *cTOF = new TCanvas("Experimental_TOF","Experimental TOF");
+    TCanvas *cTOF = new TCanvas("Experimental TOF Fits","Experimental TOF");
     cTOF->SetLogx();
     cTOF->SetLogy();
 
@@ -946,10 +996,10 @@ void FlightPathCalibration::flight_path_calibration_TC(){
     // Saving the simulation fit
     //======================================================
 
-    sim_fit->SetName("Simulated_Energy_histogram");
+    sim_fit->SetName("Simulated TOF histogram");
     sim_fit->SetTitle("Simulation with fits");
 
-    TCanvas *cSIM = new TCanvas("Energy_SIM","Simulation");
+    TCanvas *cSIM = new TCanvas("Simulated TOF Fits","Simulation");
 
     cSIM->SetLogx();
     cSIM->SetLogy();
@@ -969,12 +1019,12 @@ void FlightPathCalibration::flight_path_calibration_TC(){
     // Saving the Ratio between exp and sim
     //======================================================
 
-    TH1D* Ratio = (TH1D*)tof_fit->Clone("Ratio_Exp_Sim");
+    TH1D* Ratio = (TH1D*)tof_fit->Clone("Ratio Exp/Sim");
     TH1D* Ratioaux = (TH1D*)sim_fit->Clone("");
     Ratioaux->SetDirectory(0);
     Ratio->SetDirectory(0);
 
-    TCanvas *cRatio = new TCanvas("Ratio_Exp_Sim","Ratio_Exp_Sim");
+    TCanvas *cRatio = new TCanvas("Ratio Exp/Sim","Ratio Exp/Sim");
 
     cRatio->SetLogx();
     cRatio->SetLogy();
@@ -992,14 +1042,14 @@ void FlightPathCalibration::flight_path_calibration_TC(){
         Ratio->Divide(Ratioaux);
     }
 
-    Ratio->SetName("Ratio_Exp_Sim_Data");
+    Ratio->SetName("Ratio Exp/Sim Data");
     Ratio->SetTitle("Ratio Exp. Data / Sim. Data");
     Ratio->Write();
 
     Ratio->Draw("hist");
-
-    cRatio->Write();
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void FlightPathCalibration::logLikelihood(int &npar, double *grad, double &fval, double *par, int iflag) {
     // Parameters:

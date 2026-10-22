@@ -2,6 +2,9 @@
 #include "CoincidenceClass.h"
 
 //std::string is from root and you can use more options implemented that by using only string
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 DSSSDProcessing::DSSSDProcessing(DetectorClass* det, UserInput *u){
 
     Detector = det;
@@ -9,12 +12,16 @@ DSSSDProcessing::DSSSDProcessing(DetectorClass* det, UserInput *u){
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 DSSSDProcessing::~DSSSDProcessing(){}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DSSSDProcessing::Inizialization(){
 
 	__Root_Files__ = userInp->Get_Root_Files(); 
-    __DetType__ = userInp->Get_One_Detector();
+    __DetType__ = userInp->Get_Detectors();
     __RunList__ = userInp->Get_Run_List();
     __NumberDet__ = userInp->Get_Number_Detectors();
     __Number_Strips__ = userInp->Get_Number_Strips();
@@ -24,11 +31,15 @@ void DSSSDProcessing::Inizialization(){
         
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DSSSDProcessing::Clear(){
 
     __RunFiles__.clear();
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DSSSDProcessing::Processing(std::string Processing){
 
@@ -40,7 +51,7 @@ void DSSSDProcessing::Processing(std::string Processing){
     }else if(Processing == "Coincidence"){
     
         __RunFiles__ = Detector->Read_RunFile(__RunList__[0]);
-        if(__Number_Strips__ == 16){
+        if(__NumberDet__ == 1 && __Number_Strips__ == 16){
 
             Coincidence_Processing_Strips(Processing, __Root_Files__[0]);
 
@@ -50,9 +61,11 @@ void DSSSDProcessing::Processing(std::string Processing){
 
         }else if(__NumberDet__ == 2 && __Number_Strips__ == 32){
 
+
             Coincidence_Processing_Forward_Backward(Processing, __Root_Files__[0]);
 
         }
+        Detector->NormHistogram();
 
     }else if(Processing == "FlightPath" || Processing == "DataProcessing"){
     
@@ -82,15 +95,17 @@ void DSSSDProcessing::Processing(std::string Processing){
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DSSSDProcessing::Data_Processing(std::string Processing, std::string Rootfiles, int samplenumber){
 
     //Definition of the chain
 
     float entries = 0, entriespkup = 0;
-    if(__DetType__ == "DEED"){
+    if(__DetType__[0] == "DEED"){
         SILI = Chain_Def("DEED", Rootfiles);
         entries = SILI->GetEntries();
-    }else if(__DetType__ == "EDET"){
+    }else if(__DetType__[0] == "EDET"){
         SILI = Chain_Def("EDET", Rootfiles);
         entries = SILI->GetEntries();
     } 
@@ -104,7 +119,12 @@ void DSSSDProcessing::Data_Processing(std::string Processing, std::string Rootfi
     int Bunch_pkup = 0;
     double tof_pkup = 0;
 
-    for(int irow = 0; irow < entries; irow++){
+    const Long64_t nEntries = entries;
+    for(Long64_t irow = 0; irow < nEntries; irow++){
+
+        if ((irow % step == 0 && irow != 0) || irow == nEntries) {
+            std::cout << irow * 100 / nEntries << "% processed" << std::endl;
+        } 
 
         SILI->GetEntry(irow);
 
@@ -119,16 +139,6 @@ void DSSSDProcessing::Data_Processing(std::string Processing, std::string Rootfi
                 break;   // stop after one PKUP entry
             }
         }
-
-        if (irow % step == 0) {
-            std::cout << "For the Detector: " << irow * 100 / entries << " %\r processed..." << std::endl;
-        } 
-
-        /*if((tof - tof_pkup + userInp->Get_TOF_Offset()) > 10800 &&  (tof - tof_pkup + userInp->Get_TOF_Offset()) < 11800){
-            if(amp >= 750 && amp < 1000 && PulseIntensity > 7e12){
-                std::cout << amp << "   " << tof << "   " << detn << "   " << segment << "   " << event << "   " << BunchNumber << "   " << RunNumber << std::endl;
-            }
-        }*/
   
         if(Processing == "Calibration"){
             Detector->CalibrationProcessing(amp, tof * __Shift_Factor__, PulseIntensity, detn, tof_pkup, samplenumber);
@@ -136,20 +146,20 @@ void DSSSDProcessing::Data_Processing(std::string Processing, std::string Rootfi
             Detector->FillingHistogramProcessing(amp, tof * __Shift_Factor__, PulseIntensity, detn, BunchNumber, tof_pkup);
         }
     }
-
-    std::cout << " 100% processed" << std::endl;
     
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DSSSDProcessing::Stability_Check(std::string Rootfiles){
 
     //Definition of the chain
 
     float entries = 0, entriespkup = 0;
-    if(__DetType__ == "DEED"){
+    if(__DetType__[0] == "DEED"){
         SILI = Chain_Def("DEED", Rootfiles);
         entries = SILI->GetEntries();
-    }else if(__DetType__ == "EDET"){
+    }else if(__DetType__[0] == "EDET"){
         SILI = Chain_Def("EDET", Rootfiles);
         entries = SILI->GetEntries();
     } 
@@ -163,7 +173,6 @@ void DSSSDProcessing::Stability_Check(std::string Rootfiles){
     float area_pkup = 0;
     double tof_pkup = 0;
 
-    std::cout << "Show number of entries: " << entries << std::endl;
     const Long64_t nEntries = entries;
     for(Long64_t irow = 0; irow < nEntries; irow++){
 
@@ -182,27 +191,26 @@ void DSSSDProcessing::Stability_Check(std::string Rootfiles){
             }
         }
 
-        if (irow % step == 0) {
+        if (irow % step == 0 && irow != 0) {
             std::cout << irow * 100 / nEntries + 1 << "% processed" << std::endl;
         } 
 
         if(irow == entries - 1){
-            std::cout << "We are here" << std::endl;
             Detector->StabilityProcessing(amp, tof * __Shift_Factor__, PulseIntensity, detn, RunNumber, BunchNumber, tof_pkup, area_pkup, true);
         }else{
             Detector->StabilityProcessing(amp, tof * __Shift_Factor__, PulseIntensity, detn, RunNumber, BunchNumber, tof_pkup, area_pkup, false);
         }
 
     }
-
-    std::cout << " 100% processed" << std::endl;
     
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DSSSDProcessing::Coincidence_Processing_Forward_Backward(std::string Processing, std::string Rootfiles){
 
-    DSSSD = Chain_Def(__DetType__.c_str(), Rootfiles);
-    SSD = Chain_SSD("DEED", Rootfiles);
+    DSSSD = Chain_Def(__DetType__[0].c_str(), Rootfiles);
+    SSD = Chain_SSD(__DetType__[1].c_str(), Rootfiles);
 
     Long64_t entries_DEED = DSSSD->GetEntries();
     Long64_t entries_SSD = SSD->GetEntries();
@@ -411,15 +419,19 @@ void DSSSDProcessing::Coincidence_Processing_Forward_Backward(std::string Proces
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DSSSDProcessing::SetCoincidenceClass(CoincidenceClass* coincidence){
 
     CoincidenceAnalysis = coincidence;
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DSSSDProcessing::Coincidence_Processing_FrontBack(std::string Processing, std::string Rootfiles){
 
-    DSSSD = Chain_Def(__DetType__.c_str(), Rootfiles);
+    DSSSD = Chain_Def(__DetType__[0].c_str(), Rootfiles);
 
     Long64_t entries_DEED = DSSSD->GetEntries();
     Long64_t entriespkup = PKUP->GetEntries();
@@ -435,7 +447,15 @@ void DSSSDProcessing::Coincidence_Processing_FrontBack(std::string Processing, s
 
     int currentRun = -1;
 
+    int step = std::max(1, static_cast<int>(entries_DEED / 10));
+
+    const Long64_t nEntries = entries_DEED; 
+
    while(frontcounter < entries_DEED){
+
+        if (frontcounter % step == 0 && frontcounter != 0) {
+            std::cout << frontcounter * 100 / nEntries + 1 << "% processed" << std::endl;
+        }
 
         // Read current front event
         DSSSD->GetEntry(frontcounter);
@@ -581,12 +601,14 @@ void DSSSDProcessing::Coincidence_Processing_FrontBack(std::string Processing, s
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DSSSDProcessing::Coincidence_Processing_Strips(std::string Processing, std::string Rootfiles){
 
     //Definition of the chain
 
-    float entries_DEED = 0, entries_EDET;
-    SSD = Chain_Def(__DetType__.c_str(), Rootfiles);
+    float entries_DEED = 0, entries_EDET = 0;
+    SSD = Chain_Def(__DetType__[0].c_str(), Rootfiles);
     entries_DEED = SSD->GetEntries();
 
     Long64_t entriespkup = PKUP->GetEntries();
@@ -642,15 +664,17 @@ void DSSSDProcessing::Coincidence_Processing_Strips(std::string Processing, std:
     
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DSSSDProcessing::DeadTime_Processing(std::string Rootfiles){
 
     //Definition of the chain
 
     float entries = 0, entriespkup = 0;
-    if(__DetType__ == "DEED"){
+    if(__DetType__[0] == "DEED"){
         SILI = Chain_Def("DEED", Rootfiles);
         entries = SILI->GetEntries();
-    }else if(__DetType__ == "EDET"){
+    }else if(__DetType__[0] == "EDET"){
         SILI = Chain_Def("EDET", Rootfiles);
         entries = SILI->GetEntries();
     } 
@@ -669,10 +693,13 @@ void DSSSDProcessing::DeadTime_Processing(std::string Rootfiles){
 
     int step = std::max(1, static_cast<int>(entries / 10));
 
-    for(int irow = 0; irow < entries; irow++){
 
-        if (irow % step == 0) {
-            std::cout << "For the Detector: " << irow * 100 / entries << " %\r processed..." << std::endl;
+    const Long64_t nEntries = entries;
+    for(Long64_t irow = 0; irow < nEntries; irow++){
+
+
+        if (irow % step == 0 && irow != 0) {
+            std::cout << irow * 100 / nEntries + 1 << "% processed" << std::endl;
         } 
 
         SILI->GetEntry(irow);
@@ -707,10 +734,10 @@ void DSSSDProcessing::DeadTime_Processing(std::string Rootfiles){
         }
 
     }
-
-    std::cout << " 100% processed" << std::endl;
     
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 TChain* DSSSDProcessing::Chain_Def(const char* ftree_name, std::string Rootfiles){
 
@@ -770,6 +797,8 @@ TChain* DSSSDProcessing::Chain_Def(const char* ftree_name, std::string Rootfiles
     return ftree;  // Return the dynamically created TChain
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 TChain* DSSSDProcessing::Chain_SSD(const char* ftree_name, std::string Rootfiles){
 
     TChain* ftree = new TChain(ftree_name);  // Dynamically allocate TChain
@@ -814,6 +843,3 @@ TChain* DSSSDProcessing::Chain_SSD(const char* ftree_name, std::string Rootfiles
 
     return ftree;  // Return the dynamically created TChain
 }
-
-
-

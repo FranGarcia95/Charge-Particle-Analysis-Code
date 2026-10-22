@@ -1,5 +1,7 @@
 #include "DetectorCalibration.h" 
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 DetectorCalibration::DetectorCalibration(DetectorClass* det, UserInput *u){
 
     Detector = det;
@@ -7,7 +9,11 @@ DetectorCalibration::DetectorCalibration(DetectorClass* det, UserInput *u){
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 DetectorCalibration::~DetectorCalibration(){}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DetectorCalibration::Inizialization(){
     
@@ -28,6 +34,8 @@ void DetectorCalibration::Inizialization(){
     }
 
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DetectorCalibration::Processing(){
 
@@ -84,6 +92,8 @@ void DetectorCalibration::Processing(){
 
 }
 
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 std::vector<float> DetectorCalibration::Fitting_Peak(float Mean, TH1F* histo, int width, TFile *outfile, int a, int b){
 
     float Constant = 0;
@@ -117,6 +127,8 @@ std::vector<float> DetectorCalibration::Fitting_Peak(float Mean, TH1F* histo, in
 
     return {(float)func->GetParameter(1), (float)func->GetParError(1)};
 }
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DetectorCalibration::linear_calibration(std::vector<float> info_peak,
                                              std::vector<float> info_peak_err,
